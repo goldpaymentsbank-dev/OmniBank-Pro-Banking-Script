@@ -1,0 +1,6 @@
+{
+  "name": "Gold Payments Bank",
+  "description": "Modern online banking platform featuring fiat and crypto management, Mexican CLABE SPEI transfers, merchant MIDs in production mode, Luhn verified cards, and detailed printable transaction receipts.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
