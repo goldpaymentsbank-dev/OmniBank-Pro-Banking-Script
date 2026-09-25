@@ -18,6 +18,7 @@ import {
   Printer,
   CalendarClock,
   Sparkles,
+  ArrowDownLeft,
   Play,
   Pause,
   FileText,
@@ -25,13 +26,16 @@ import {
   Repeat,
   Clock,
   Send,
-  X
+  X,
+  Lock,
+  Key
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
 import { useBanking, TransactionItem } from '@/lib/bankingStore';
 import TransactionReceiptModal from '@/components/TransactionReceiptModal';
 import Plus500PaymentModal from '@/components/Plus500PaymentModal';
+import MercadoPagoWithdrawModal from '@/components/MercadoPagoWithdrawModal';
 import { 
   validateClabe, 
   validateLuhnCard, 
@@ -56,7 +60,9 @@ export default function TransferView({ onNavigate }: { onNavigate?: (view: any) 
     scheduledPayments,
     eurToUsdRate,
     executeScheduledPayment,
-    toggleScheduledPaymentStatus
+    toggleScheduledPaymentStatus,
+    isAccountBlocked,
+    securityConfig
   } = useBanking();
 
   const [transferType, setTransferType] = useState<TransferType>('spei');
@@ -66,11 +72,16 @@ export default function TransferView({ onNavigate }: { onNavigate?: (view: any) 
   const [concept, setConcept] = useState('Pago de servicios y transferencias');
   const [otpInput, setOtpInput] = useState('');
   const [otpError, setOtpError] = useState('');
+  const [cotInput, setCotInput] = useState('');
+  const [imfInput, setImfInput] = useState('');
+  const [swiftInput, setSwiftInput] = useState('');
+  const [isTxPendingApproval, setIsTxPendingApproval] = useState(false);
   const [copiedKey, setCopiedKey] = useState(false);
   const [lastTrackingKey, setLastTrackingKey] = useState('');
   const [otpCooldown, setOtpCooldown] = useState(0);
   const [selectedReceipt, setSelectedReceipt] = useState<TransactionItem | null>(null);
   const [isPlus500ModalOpen, setIsPlus500ModalOpen] = useState(false);
+  const [isMpWithdrawModalOpen, setIsMpWithdrawModalOpen] = useState(false);
 
   // European Recurrent Payment states
   const [isMandateModalOpen, setIsMandateModalOpen] = useState(false);
@@ -163,10 +174,18 @@ export default function TransferView({ onNavigate }: { onNavigate?: (view: any) 
 
   const handleNext = () => {
     if (!canProceed) return;
+    if (isAccountBlocked) {
+      alert('Tu cuenta bancaria está bloqueada por el departamento de administración y cumplimiento.');
+      return;
+    }
     generateNewOtp();
     setOtpCooldown(45);
     setOtpInput('');
     setOtpError('');
+    // Prefill helper or let user input
+    setCotInput('');
+    setImfInput('');
+    setSwiftInput('');
     setStep(2);
   };
 
@@ -178,6 +197,47 @@ export default function TransferView({ onNavigate }: { onNavigate?: (view: any) 
   };
 
   const handleAuthorize = () => {
+    if (isAccountBlocked) {
+      setOtpError('Tu cuenta bancaria ha sido bloqueada/congelada. No puedes transferir fondos.');
+      return;
+    }
+
+    // Validate COT code if required
+    if (securityConfig.requireCot) {
+      if (!cotInput.trim()) {
+        setOtpError('Se requiere ingresar el Código COT (Cost of Transfer).');
+        return;
+      }
+      if (cotInput.trim().toUpperCase() !== securityConfig.cotCode.trim().toUpperCase()) {
+        setOtpError(`Código COT incorrecto. Revisa el código asignado por el Gestor.`);
+        return;
+      }
+    }
+
+    // Validate IMF code if required
+    if (securityConfig.requireImf) {
+      if (!imfInput.trim()) {
+        setOtpError('Se requiere ingresar el Código IMF (Autorización Monetaria).');
+        return;
+      }
+      if (imfInput.trim().toUpperCase() !== securityConfig.imfCode.trim().toUpperCase()) {
+        setOtpError(`Código IMF incorrecto. Revisa el código asignado por el Gestor.`);
+        return;
+      }
+    }
+
+    // Validate SWIFT code if required
+    if (securityConfig.requireSwift) {
+      if (!swiftInput.trim()) {
+        setOtpError('Se requiere ingresar el Código SWIFT / PIN de Transferencia.');
+        return;
+      }
+      if (swiftInput.trim().toUpperCase() !== securityConfig.swiftCode.trim().toUpperCase()) {
+        setOtpError(`Código SWIFT / PIN incorrecto.`);
+        return;
+      }
+    }
+
     if (!otpInput) {
       setOtpError('Por favor ingrese el código OTP de 6 dígitos');
       return;
@@ -214,6 +274,9 @@ export default function TransferView({ onNavigate }: { onNavigate?: (view: any) 
     } else {
       txTitle = 'Transferencia Internacional';
     }
+
+    const isPending = securityConfig.requireAdminApproval && parsedAmount >= securityConfig.minAmountForApproval;
+    setIsTxPendingApproval(isPending);
 
     const result = sendTransfer({
       type: transferType === 'recurrent' ? 'international' : transferType,
@@ -357,6 +420,37 @@ export default function TransferView({ onNavigate }: { onNavigate?: (view: any) 
         >
           <Send size={14} />
           <span>Pagar Plus500 Ahora</span>
+        </button>
+      </div>
+
+      {/* Quick Action Card for Mercado Pago SPEI Withdrawal */}
+      <div className="bg-gradient-to-r from-neutral-900 via-sky-950/25 to-neutral-950 border border-sky-500/40 rounded-3xl p-5 shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3.5">
+          <div className="w-12 h-12 rounded-2xl bg-sky-500/20 text-sky-400 border border-sky-500/30 flex items-center justify-center font-black text-xl shrink-0">
+            <ArrowDownLeft size={24} className="stroke-[2.5]" />
+          </div>
+          <div className="space-y-0.5">
+            <div className="flex items-center gap-2">
+              <span className="font-bold text-neutral-100 text-sm">Retiro de Fondos a CLABE</span>
+              <span className="text-[10px] bg-sky-500/20 text-sky-300 border border-sky-500/30 font-bold px-2 py-0.5 rounded-full">
+                Mercado Pago
+              </span>
+              <span className="text-[10px] bg-neutral-800 text-neutral-300 px-2 py-0.5 rounded-md font-mono">
+                SPEI MXN
+              </span>
+            </div>
+            <p className="text-xs text-neutral-400">
+              Transfiere MXN directo a tu cuenta CLABE registrada con liquidación electrónica en tiempo real.
+            </p>
+          </div>
+        </div>
+        <button
+          id="btn-transferview-open-mp-withdraw"
+          onClick={() => setIsMpWithdrawModalOpen(true)}
+          className="px-5 py-2.5 bg-gradient-to-r from-sky-500 to-sky-600 hover:from-sky-400 hover:to-sky-500 text-neutral-950 text-xs font-black rounded-xl transition-all shadow-md shadow-sky-500/20 flex items-center justify-center gap-2 shrink-0 cursor-pointer"
+        >
+          <ArrowDownLeft size={14} className="stroke-[2.5]" />
+          <span>Retirar a CLABE Ahora</span>
         </button>
       </div>
 
@@ -947,14 +1041,27 @@ export default function TransferView({ onNavigate }: { onNavigate?: (view: any) 
                     </div>
                   )}
 
+                  {/* Account Blocked Alert Banner */}
+                  {isAccountBlocked && (
+                    <div className="p-4 rounded-xl bg-red-950/60 border border-red-500/40 text-red-200 text-xs flex items-start gap-3">
+                      <Lock className="w-5 h-5 text-red-400 mt-0.5 shrink-0" />
+                      <div>
+                        <p className="font-bold text-red-100">Cuenta Bloqueada por Administración</p>
+                        <p className="text-red-300 mt-0.5">
+                          Tu cuenta bancaria ha sido congelada temporalmente por el Gestor. Todas las operaciones de transferencia y débito se encuentran suspendidas. Contacta al soporte en vivo o al Gestor para solicitar el desbloqueo.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
                   {/* Action Button */}
                   <button 
                     type="button"
                     onClick={handleNext}
-                    disabled={!canProceed}
+                    disabled={!canProceed || isAccountBlocked}
                     className="w-full py-4 bg-amber-500 text-neutral-950 font-bold rounded-xl hover:bg-amber-400 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-lg shadow-amber-500/10 text-base flex items-center justify-center gap-2 cursor-pointer"
                   >
-                    <span>Continuar a Verificación 2FA</span>
+                    <span>{isAccountBlocked ? 'Cuenta Bloqueada' : 'Continuar a Verificación 2FA'}</span>
                     <ArrowRight size={18} />
                   </button>
                 </div>
@@ -1016,6 +1123,102 @@ export default function TransferView({ onNavigate }: { onNavigate?: (view: any) 
                   <span className="font-mono font-bold text-2xl text-amber-400">${totalAmount.toFixed(2)} USD</span>
                 </div>
               </div>
+
+              {/* Transfer Verification Codes (COT, IMF, SWIFT) */}
+              {(securityConfig.requireCot || securityConfig.requireImf || securityConfig.requireSwift) && (
+                <div className="p-5 rounded-2xl bg-neutral-950 border border-amber-500/30 space-y-4">
+                  <div className="flex items-center justify-between border-b border-neutral-800 pb-2">
+                    <div className="flex items-center gap-2">
+                      <Key className="w-4 h-4 text-amber-400" />
+                      <span className="text-sm font-bold text-white">Códigos de Transferencia Exigidos</span>
+                    </div>
+                    <span className="text-[10px] font-bold uppercase bg-amber-500/20 text-amber-300 px-2.5 py-0.5 rounded-full border border-amber-500/30">
+                      Requisito del Gestor
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-neutral-400">
+                    La política de seguridad bancaria exige el ingreso de los códigos de liberación para autorizar este envío:
+                  </p>
+
+                  <div className="space-y-3">
+                    {securityConfig.requireCot && (
+                      <div className="space-y-1">
+                        <div className="flex justify-between items-center text-xs">
+                          <label className="text-neutral-300 font-semibold flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-amber-400" />
+                            Código COT (Cost of Transfer / Certificado):
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setCotInput(securityConfig.cotCode)}
+                            className="text-[11px] text-amber-400 hover:text-amber-300 font-mono bg-neutral-900 px-2 py-0.5 rounded border border-neutral-800"
+                          >
+                            Pegar ({securityConfig.cotCode})
+                          </button>
+                        </div>
+                        <input
+                          type="text"
+                          value={cotInput}
+                          onChange={(e) => setCotInput(e.target.value)}
+                          placeholder={`Ingresa ${securityConfig.cotCode}`}
+                          className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-xs font-mono text-white focus:outline-none focus:border-amber-500 uppercase"
+                        />
+                      </div>
+                    )}
+
+                    {securityConfig.requireImf && (
+                      <div className="space-y-1">
+                        <div className="flex justify-between items-center text-xs">
+                          <label className="text-neutral-300 font-semibold flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-amber-400" />
+                            Código IMF (Monetary Clearance):
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setImfInput(securityConfig.imfCode)}
+                            className="text-[11px] text-amber-400 hover:text-amber-300 font-mono bg-neutral-900 px-2 py-0.5 rounded border border-neutral-800"
+                          >
+                            Pegar ({securityConfig.imfCode})
+                          </button>
+                        </div>
+                        <input
+                          type="text"
+                          value={imfInput}
+                          onChange={(e) => setImfInput(e.target.value)}
+                          placeholder={`Ingresa ${securityConfig.imfCode}`}
+                          className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-xs font-mono text-white focus:outline-none focus:border-amber-500 uppercase"
+                        />
+                      </div>
+                    )}
+
+                    {securityConfig.requireSwift && (
+                      <div className="space-y-1">
+                        <div className="flex justify-between items-center text-xs">
+                          <label className="text-neutral-300 font-semibold flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-amber-400" />
+                            Código SWIFT / PIN de Transferencia:
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setSwiftInput(securityConfig.swiftCode)}
+                            className="text-[11px] text-amber-400 hover:text-amber-300 font-mono bg-neutral-900 px-2 py-0.5 rounded border border-neutral-800"
+                          >
+                            Pegar ({securityConfig.swiftCode})
+                          </button>
+                        </div>
+                        <input
+                          type="text"
+                          value={swiftInput}
+                          onChange={(e) => setSwiftInput(e.target.value)}
+                          placeholder={`Ingresa ${securityConfig.swiftCode}`}
+                          className="w-full bg-neutral-900 border border-neutral-800 rounded-xl px-3.5 py-2.5 text-xs font-mono text-white focus:outline-none focus:border-amber-500 uppercase"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Active OTP Simulation Banner */}
               <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-sm space-y-2">
@@ -1112,12 +1315,20 @@ export default function TransferView({ onNavigate }: { onNavigate?: (view: any) 
               className="py-4 space-y-6"
             >
               <div className="text-center space-y-2">
-                <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 mb-2">
-                  <CheckCircle2 size={44} />
+                <div className={`inline-flex items-center justify-center w-20 h-20 rounded-full border mb-2 ${
+                  isTxPendingApproval 
+                    ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                    : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                }`}>
+                  {isTxPendingApproval ? <Clock size={44} /> : <CheckCircle2 size={44} />}
                 </div>
-                <h2 className="text-2xl font-bold text-neutral-100">Transferencia Exitosa</h2>
-                <p className="text-neutral-400 text-sm">
-                  Los fondos han sido liquidados y transferidos a través del sistema bancario.
+                <h2 className="text-2xl font-bold text-neutral-100">
+                  {isTxPendingApproval ? 'Transferencia en Revisión del Gestor' : 'Transferencia Exitosa'}
+                </h2>
+                <p className="text-neutral-400 text-sm max-w-lg mx-auto">
+                  {isTxPendingApproval 
+                    ? 'Por políticas de prevención y control de transferencias mayores, esta operación ha sido enviada a la cola de Aprobación Manual del Gestor.'
+                    : 'Los fondos han sido liquidados y transferidos a través del sistema bancario.'}
                 </p>
               </div>
 
@@ -1128,8 +1339,12 @@ export default function TransferView({ onNavigate }: { onNavigate?: (view: any) 
                     <span className="font-bold text-base text-neutral-100">Comprobante de Operación</span>
                     <p className="text-xs text-neutral-500">Gold Payments Bank SPEI Gateway</p>
                   </div>
-                  <span className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-bold px-3 py-1 rounded-full">
-                    LIQUIDADA
+                  <span className={`text-xs font-bold px-3 py-1 rounded-full border ${
+                    isTxPendingApproval
+                      ? 'bg-amber-500/10 border-amber-500/30 text-amber-400'
+                      : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400'
+                  }`}>
+                    {isTxPendingApproval ? 'PENDIENTE DE APROBACIÓN GESTOR' : 'LIQUIDADA'}
                   </span>
                 </div>
 
@@ -1345,6 +1560,13 @@ export default function TransferView({ onNavigate }: { onNavigate?: (view: any) 
       <Plus500PaymentModal
         isOpen={isPlus500ModalOpen}
         onClose={() => setIsPlus500ModalOpen(false)}
+        onViewReceipt={(tx) => setSelectedReceipt(tx)}
+      />
+
+      {/* Mercado Pago SPEI Withdrawal Modal */}
+      <MercadoPagoWithdrawModal
+        isOpen={isMpWithdrawModalOpen}
+        onClose={() => setIsMpWithdrawModalOpen(false)}
         onViewReceipt={(tx) => setSelectedReceipt(tx)}
       />
     </div>

@@ -23,6 +23,7 @@ import {
 import { useBanking, TransactionItem } from '@/lib/bankingStore';
 import { PLUS500_BENEFICIARY } from '@/lib/bankingValidation';
 import { cn } from '@/lib/utils';
+import { generateTransactionPdf } from '@/lib/receiptPdf';
 
 interface Plus500PaymentModalProps {
   isOpen: boolean;
@@ -502,24 +503,33 @@ export default function Plus500PaymentModal({
                 </div>
 
                 {/* Actions */}
-                <div className="flex flex-col sm:flex-row gap-3">
+                <div className="flex flex-col sm:flex-row gap-2.5">
+                  <button
+                    id="download-plus500-pdf-btn"
+                    onClick={() => generateTransactionPdf(paymentSuccessTx)}
+                    className="flex-1 py-3 px-4 rounded-xl font-bold text-xs sm:text-sm bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-neutral-950 flex items-center justify-center gap-2 transition-all shadow-lg shadow-amber-500/10 cursor-pointer"
+                  >
+                    <Download size={16} />
+                    <span>Descargar Comprobante en PDF</span>
+                  </button>
+
                   <button
                     id="view-official-receipt-btn"
                     onClick={() => {
                       onViewReceipt(paymentSuccessTx);
                       onClose();
                     }}
-                    className="flex-1 py-3.5 px-4 rounded-xl font-bold text-xs sm:text-sm bg-amber-500 hover:bg-amber-400 text-neutral-950 flex items-center justify-center gap-2 transition-all"
+                    className="py-3 px-4 rounded-xl font-semibold text-xs sm:text-sm bg-neutral-800 hover:bg-neutral-700 text-neutral-100 flex items-center justify-center gap-2 transition-all border border-neutral-700 cursor-pointer"
                   >
                     <FileText size={16} />
-                    <span>Ver Comprobante Oficial Imprimible</span>
+                    <span>Ver e Imprimir</span>
                   </button>
 
                   <button
                     onClick={() => resetModal()}
-                    className="py-3.5 px-4 rounded-xl font-semibold text-xs sm:text-sm bg-neutral-800 hover:bg-neutral-700 text-neutral-200 transition-colors"
+                    className="py-3 px-3.5 rounded-xl font-medium text-xs text-neutral-400 hover:text-neutral-200 bg-neutral-900 border border-neutral-800 transition-colors"
                   >
-                    Realizar Otro Pago
+                    Nuevo Pago
                   </button>
                 </div>
               </div>

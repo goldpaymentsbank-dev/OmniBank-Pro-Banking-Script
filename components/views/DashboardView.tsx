@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { 
   ArrowUpRight, 
   ArrowDownRight, 
+  ArrowDownLeft,
   CreditCard, 
   Wallet, 
   Send, 
@@ -25,6 +26,7 @@ import { cn } from '@/lib/utils';
 import { useBanking, TransactionItem } from '@/lib/bankingStore';
 import TransactionReceiptModal from '@/components/TransactionReceiptModal';
 import Plus500PaymentModal from '@/components/Plus500PaymentModal';
+import MercadoPagoWithdrawModal from '@/components/MercadoPagoWithdrawModal';
 
 const chartData = [
   { name: 'Lun', balance: 18200 },
@@ -52,6 +54,7 @@ export default function DashboardView({ onNavigate }: { onNavigate: (view: any) 
   // Modals state
   const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
   const [isPlus500ModalOpen, setIsPlus500ModalOpen] = useState(false);
+  const [isMpWithdrawModalOpen, setIsMpWithdrawModalOpen] = useState(false);
   const [depositAmount, setDepositAmount] = useState('');
   const [depositMethod, setDepositMethod] = useState<'spei' | 'card' | 'crypto'>('spei');
   const [depositSuccess, setDepositSuccess] = useState('');
@@ -120,6 +123,14 @@ export default function DashboardView({ onNavigate }: { onNavigate: (view: any) 
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          <button 
+            id="btn-mercadopago-withdraw-dash"
+            onClick={() => setIsMpWithdrawModalOpen(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-sky-500 to-sky-600 hover:from-sky-400 hover:to-sky-500 text-neutral-950 rounded-xl font-bold transition-all text-sm shadow-md shadow-sky-500/20 cursor-pointer"
+          >
+            <ArrowDownLeft size={16} className="stroke-[2.5]" />
+            <span>Retirar MXN (Mercado Pago)</span>
+          </button>
           <button 
             onClick={() => setIsDepositModalOpen(true)}
             className="flex items-center gap-2 px-4 py-2.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-xl font-semibold hover:bg-emerald-500/20 transition-colors text-sm"
@@ -635,6 +646,13 @@ export default function DashboardView({ onNavigate }: { onNavigate: (view: any) 
       <Plus500PaymentModal
         isOpen={isPlus500ModalOpen}
         onClose={() => setIsPlus500ModalOpen(false)}
+        onViewReceipt={(tx) => setSelectedTransaction(tx)}
+      />
+
+      {/* Mercado Pago SPEI Withdrawal Modal */}
+      <MercadoPagoWithdrawModal
+        isOpen={isMpWithdrawModalOpen}
+        onClose={() => setIsMpWithdrawModalOpen(false)}
         onViewReceipt={(tx) => setSelectedTransaction(tx)}
       />
     </div>

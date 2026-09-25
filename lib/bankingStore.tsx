@@ -137,6 +137,47 @@ export interface LoanItem {
   appliedDate: string;
 }
 
+export interface UserAccountItem {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  accountNumber: string;
+  clabe: string;
+  balance: number;
+  status: 'active' | 'blocked' | 'in_verification';
+  role: 'user' | 'admin';
+  tier: 'Personal' | 'Premier' | 'Empresarial';
+  createdAt: string;
+  totalTransfers: number;
+}
+
+export interface TransferSecurityConfig {
+  requireCot: boolean;
+  requireImf: boolean;
+  requireSwift: boolean;
+  cotCode: string;
+  imfCode: string;
+  swiftCode: string;
+  requireAdminApproval: boolean;
+  minAmountForApproval: number;
+}
+
+export interface EmailNotificationLog {
+  id: string;
+  to: string;
+  recipientName: string;
+  subject: string;
+  preview: string;
+  bodyHtml: string;
+  sentAt: string;
+  type: 'deposit' | 'debit' | 'transfer_sent' | 'transfer_received' | 'transfer_pending' | 'transfer_approved' | 'transfer_rejected' | 'account_blocked' | 'account_unblocked' | 'security';
+  amount?: number;
+  trackingKey?: string;
+  reference?: string;
+  status: 'delivered' | 'sent';
+}
+
 interface BankingContextType {
   balance: number;
   userClabe: string;
@@ -144,6 +185,20 @@ interface BankingContextType {
   userName: string;
   userEmail: string;
   userPhone: string;
+  isAccountBlocked: boolean;
+  users: UserAccountItem[];
+  activeUserId: string;
+  securityConfig: TransferSecurityConfig;
+  emailLogs: EmailNotificationLog[];
+  adminCreditAccount: (userId: string, amount: number, concept: string) => { success: boolean; tx?: TransactionItem; error?: string };
+  adminDebitAccount: (userId: string, amount: number, concept: string) => { success: boolean; tx?: TransactionItem; error?: string };
+  adminToggleAccountBlock: (userId: string) => { success: boolean; newStatus: 'active' | 'blocked' };
+  adminApproveTransfer: (txId: string) => { success: boolean; tx?: TransactionItem; error?: string };
+  adminRejectTransfer: (txId: string, reason: string) => { success: boolean; tx?: TransactionItem; error?: string };
+  updateSecurityConfig: (config: Partial<TransferSecurityConfig>) => void;
+  registerNewUser: (data: { name: string; email: string; phone?: string; initialDeposit?: number; tier?: 'Personal' | 'Premier' | 'Empresarial' }) => UserAccountItem;
+  switchUser: (userId: string) => void;
+  triggerManualEmailNotification: (log: Omit<EmailNotificationLog, 'id' | 'sentAt' | 'status'>) => void;
   cryptoBtc: number;
   cryptoEth: number;
   cryptoUsdt: number;
@@ -213,6 +268,21 @@ interface BankingContextType {
     tx?: TransactionItem;
     error?: string;
   };
+  executeMercadoPagoWithdrawal: (params: {
+    amountMxn?: number;
+    amountUsd?: number;
+    clabe?: string;
+    recipientName?: string;
+    concept?: string;
+    rfc?: string;
+  }) => Promise<{
+    success: boolean;
+    trackingKey: string;
+    mpPaymentId?: string;
+    tx?: TransactionItem;
+    error?: string;
+    mode?: string;
+  }>;
   sendMorseAchTransfer: (params: {
     amountUsd: number;
     memo?: string;
@@ -348,12 +418,132 @@ const INITIAL_CARDS: CardItem[] = [
   },
 ];
 
+export const INITIAL_USERS: UserAccountItem[] = [
+  {
+    id: 'usr-01',
+    name: 'Carlos Mendoza',
+    email: 'goldpaymentsbank@gmail.com',
+    phone: '+52 221 227 5075',
+    accountNumber: 'GP-8492-9102',
+    clabe: INITIAL_CLABE,
+    balance: 21540.50,
+    status: 'active',
+    role: 'user',
+    tier: 'Premier',
+    createdAt: '10 Ene, 2026',
+    totalTransfers: 14,
+  },
+  {
+    id: 'usr-02',
+    name: 'Elena Rostova Valdés',
+    email: 'elena.rostova@globalcapital.com',
+    phone: '+52 554 912 3044',
+    accountNumber: 'GP-7192-3841',
+    clabe: '846180492019284025',
+    balance: 124800.50,
+    status: 'active',
+    role: 'user',
+    tier: 'Empresarial',
+    createdAt: '22 Feb, 2026',
+    totalTransfers: 28,
+  },
+  {
+    id: 'usr-03',
+    name: 'Alejandro Silva Monroy',
+    email: 'a.silva@inversiones-mx.org',
+    phone: '+52 331 829 4410',
+    accountNumber: 'GP-3920-1194',
+    clabe: '846180492019284033',
+    balance: 14200.00,
+    status: 'blocked',
+    role: 'user',
+    tier: 'Personal',
+    createdAt: '05 Mar, 2026',
+    totalTransfers: 6,
+  },
+  {
+    id: 'usr-04',
+    name: 'Inversiones Delta S.A. de C.V.',
+    email: 'tesoreria@deltacapital.mx',
+    phone: '+52 818 902 1155',
+    accountNumber: 'GP-5510-9923',
+    clabe: '846180492019284041',
+    balance: 389400.00,
+    status: 'active',
+    role: 'user',
+    tier: 'Empresarial',
+    createdAt: '18 Abr, 2026',
+    totalTransfers: 62,
+  },
+];
+
+export const DEFAULT_SECURITY_CONFIG: TransferSecurityConfig = {
+  requireCot: true,
+  requireImf: true,
+  requireSwift: false,
+  cotCode: 'COT-8942',
+  imfCode: 'IMF-5501',
+  swiftCode: 'SWIFT-GP88',
+  requireAdminApproval: true,
+  minAmountForApproval: 5000,
+};
+
+export const INITIAL_EMAIL_LOGS: EmailNotificationLog[] = [
+  {
+    id: 'email-01',
+    to: 'goldpaymentsbank@gmail.com',
+    recipientName: 'Carlos Mendoza',
+    subject: 'Comprobante Oficial: Acreditación SPEI Aprobada',
+    preview: 'Se han acreditado $4,250.00 USD en su cuenta terminación 9102.',
+    bodyHtml: `<div style="font-family:sans-serif;color:#1e293b;padding:20px;border-radius:12px;background:#f8fafc;border:1px solid #e2e8f0;">
+      <h2 style="color:#059669;margin-bottom:12px;">Comprobante Digital de Acreditación</h2>
+      <p>Estimado(a) <strong>Carlos Mendoza</strong>,</p>
+      <p>Le notificamos que se ha procesado exitosamente la acreditación de fondos en su cuenta de <strong>Banco Gold Payments</strong>.</p>
+      <table style="width:100%;margin:16px 0;border-collapse:collapse;font-size:14px;">
+        <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;">Monto acreditado:</td><td style="padding:8px 0;text-align:right;font-weight:bold;color:#059669;">+$4,250.00 USD</td></tr>
+        <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;">Cuenta destino:</td><td style="padding:8px 0;text-align:right;font-weight:bold;">GP-8492-9102</td></tr>
+        <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;">Clave de Rastreo SPEI:</td><td style="padding:8px 0;text-align:right;font-family:monospace;">SPEI846180948291048291</td></tr>
+        <tr><td style="padding:8px 0;color:#64748b;">Estado:</td><td style="padding:8px 0;text-align:right;color:#059669;font-weight:bold;">Liquidado & Disponible</td></tr>
+      </table>
+      <p style="font-size:12px;color:#94a3b8;margin-top:20px;">Banco Gold Payments | Sistema Central Automatizado de Notificaciones Bancarias.</p>
+    </div>`,
+    sentAt: 'Hoy, 09:00 AM',
+    type: 'deposit',
+    amount: 4250,
+    trackingKey: 'SPEI846180948291048291',
+    status: 'delivered',
+  },
+  {
+    id: 'email-02',
+    to: 'goldpaymentsbank@gmail.com',
+    recipientName: 'Carlos Mendoza',
+    subject: 'Notificación de Débito: Envío de Transferencia',
+    preview: 'Transferencia enviada por $150.00 USD a Donación GoFundMe.',
+    bodyHtml: `<div style="font-family:sans-serif;color:#1e293b;padding:20px;border-radius:12px;background:#f8fafc;border:1px solid #e2e8f0;">
+      <h2 style="color:#0284c7;margin-bottom:12px;">Notificación de Débito Bancario</h2>
+      <p>Estimado(a) <strong>Carlos Mendoza</strong>,</p>
+      <p>Se ha procesado un débito en su cuenta por concepto de transferencia saliente autorizada.</p>
+      <table style="width:100%;margin:16px 0;border-collapse:collapse;font-size:14px;">
+        <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;">Monto enviado:</td><td style="padding:8px 0;text-align:right;font-weight:bold;color:#dc2626;">-$150.00 USD</td></tr>
+        <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;">Destinatario:</td><td style="padding:8px 0;text-align:right;">GoFundMe Apoyo Médico</td></tr>
+        <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;">Folio de Operación:</td><td style="padding:8px 0;text-align:right;font-family:monospace;">SPEI846180948291048292</td></tr>
+      </table>
+      <p style="font-size:12px;color:#94a3b8;">Banco Gold Payments | Servicio al Cliente 24/7</p>
+    </div>`,
+    sentAt: 'Ayer, 14:30 PM',
+    type: 'transfer_sent',
+    amount: 150,
+    trackingKey: 'SPEI846180948291048292',
+    status: 'delivered',
+  },
+];
+
 export function BankingProvider({ children }: { children: React.ReactNode }) {
   // Initialize state with mathematically valid values
   const [balance, setBalance] = useState<number>(21540.50);
   const [userClabe, setUserClabe] = useState<string>(INITIAL_CLABE);
   const [userAccount] = useState<string>('GP-8492-9102');
-  const [userName, setUserName] = useState<string>('John Doe');
+  const [userName, setUserName] = useState<string>('Carlos Mendoza');
   const [userEmail, setUserEmail] = useState<string>('goldpaymentsbank@gmail.com');
   const [userPhone, setUserPhone] = useState<string>('+52 221 227 5075');
   const [cryptoBtc, setCryptoBtc] = useState<number>(0.125);
@@ -369,6 +559,15 @@ export function BankingProvider({ children }: { children: React.ReactNode }) {
   });
   const [activeOtp, setActiveOtp] = useState<string>('749215');
 
+  // Gestor / Admin State & Configuration
+  const [users, setUsers] = useState<UserAccountItem[]>(INITIAL_USERS);
+  const [activeUserId, setActiveUserId] = useState<string>('usr-01');
+  const [securityConfig, setSecurityConfig] = useState<TransferSecurityConfig>(DEFAULT_SECURITY_CONFIG);
+  const [emailLogs, setEmailLogs] = useState<EmailNotificationLog[]>(INITIAL_EMAIL_LOGS);
+
+  const currentUser = users.find(u => u.id === activeUserId);
+  const isAccountBlocked = currentUser?.status === 'blocked';
+
   // Generate valid initial cards with 100% Luhn compliant numbers
   const [cards, setCards] = useState<CardItem[]>(INITIAL_CARDS);
   const [scheduledPayments, setScheduledPayments] = useState<ScheduledPaymentItem[]>(INITIAL_SCHEDULED_PAYMENTS);
@@ -377,6 +576,39 @@ export function BankingProvider({ children }: { children: React.ReactNode }) {
   const [morseBeneficiary, setMorseBeneficiary] = useState<MorseBeneficiaryData>(MORSE_DEFAULT_BENEFICIARY);
 
   const [transactions, setTransactions] = useState<TransactionItem[]>([
+    {
+      id: 'tx-pending-01',
+      type: 'sent',
+      category: 'international',
+      title: 'Transferencia Wire Internacional (Pendiente de Aprobación Gestor)',
+      recipientOrSender: 'Banco Santander España (ES91 2100 0418 4502 0005 1332)',
+      date: 'Hoy, 08:15 AM',
+      timestamp: 1725450000000,
+      amount: 8500.00,
+      fee: 25.00,
+      currency: 'USD',
+      status: 'pending',
+      trackingKey: 'WIRE-PEND-84920194',
+      iban: 'ES91 2100 0418 4502 0005 1332',
+      bic: 'BSCHESMMXXX',
+      reference: 'Factura Adquisición Bienes de Capital #9914',
+    },
+    {
+      id: 'tx-pending-02',
+      type: 'sent',
+      category: 'spei',
+      title: 'Transferencia SPEI Corporativa (Pendiente de Aprobación Gestor)',
+      recipientOrSender: 'BBVA México (CLABE: ••••4829)',
+      date: 'Hoy, 07:45 AM',
+      timestamp: 1725448200000,
+      amount: 12000.00,
+      fee: 10.00,
+      currency: 'USD',
+      status: 'pending',
+      trackingKey: 'SPEI-PEND-71092834',
+      clabe: '012180015482910482',
+      reference: 'Liquidación Anticipada de Proveedor Corporativo',
+    },
     {
       id: 'tx-morse-01',
       type: 'sent',
@@ -537,7 +769,19 @@ export function BankingProvider({ children }: { children: React.ReactNode }) {
     return sanitized === activeOtp;
   };
 
-  // Process a transfer with real balance deduction and transaction record
+  const triggerManualEmailNotification = (data: Omit<EmailNotificationLog, 'id' | 'sentAt' | 'status'>) => {
+    const now = new Date();
+    const timeStr = 'Hoy, ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const newLog: EmailNotificationLog = {
+      ...data,
+      id: 'email-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
+      sentAt: timeStr,
+      status: 'delivered',
+    };
+    setEmailLogs(prev => [newLog, ...prev]);
+  };
+
+  // Process a transfer with real balance deduction, COT/IMF rules, approval gate and auto email
   const sendTransfer = (details: {
     type: 'internal' | 'spei' | 'gofundme' | 'international' | 'card' | 'morse' | 'ach';
     recipient: string;
@@ -547,6 +791,14 @@ export function BankingProvider({ children }: { children: React.ReactNode }) {
     clabe?: string;
     cardLast4?: string;
   }) => {
+    if (isAccountBlocked) {
+      return { 
+        success: false, 
+        trackingKey: '', 
+        error: 'Tu cuenta bancaria ha sido bloqueada/congelada por el departamento de administración y cumplimiento. No se pueden procesar débitos ni transferencias.' 
+      };
+    }
+
     const totalRequired = details.amount + details.fee;
     if (totalRequired > balance) {
       return { success: false, trackingKey: '', error: 'Saldo insuficiente en tu cuenta para cubrir la transferencia y comisión.' };
@@ -556,20 +808,30 @@ export function BankingProvider({ children }: { children: React.ReactNode }) {
     const now = new Date();
     const dateFormatted = 'Hoy, ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
+    // Deduct funds
     setBalance(prev => prev - totalRequired);
+    setUsers(prev => prev.map(u => {
+      if (u.id === activeUserId) {
+        return { ...u, balance: Math.max(0, u.balance - totalRequired), totalTransfers: u.totalTransfers + 1 };
+      }
+      return u;
+    }));
+
+    const requiresApproval = securityConfig.requireAdminApproval && details.amount >= securityConfig.minAmountForApproval;
+    const txStatus = requiresApproval ? 'pending' : 'completed';
 
     const newTx: TransactionItem = {
       id: 'tx-' + Date.now(),
       type: 'sent',
       category: details.type,
-      title: details.title,
+      title: requiresApproval ? `${details.title} (En Revisión por Gestor)` : details.title,
       recipientOrSender: details.recipient,
       date: dateFormatted,
       timestamp: Date.now(),
       amount: details.amount,
       fee: details.fee,
       currency: 'USD',
-      status: 'completed',
+      status: txStatus,
       trackingKey,
       clabe: details.clabe,
       cardLast4: details.cardLast4,
@@ -577,22 +839,60 @@ export function BankingProvider({ children }: { children: React.ReactNode }) {
 
     setTransactions(prev => [newTx, ...prev]);
 
-    // Push notification
+    // Push in-app notification
     const newNotif: NotificationItem = {
       id: 'notif-' + Date.now(),
-      title: 'Transferencia Autorizada',
-      message: `Has enviado $${details.amount.toFixed(2)} USD a ${details.recipient}. Folio: ${trackingKey}`,
+      title: requiresApproval ? 'Transferencia Enviada a Aprobación' : 'Transferencia Autorizada',
+      message: requiresApproval 
+        ? `Has enviado $${details.amount.toFixed(2)} USD a ${details.recipient}. Debido al monto, se encuentra en espera de aprobación por el Gestor. Folio: ${trackingKey}`
+        : `Has enviado $${details.amount.toFixed(2)} USD a ${details.recipient}. Folio: ${trackingKey}`,
       time: 'Ahora',
       read: false,
-      type: 'success',
+      type: requiresApproval ? 'alert' : 'success',
     };
     setNotifications(prev => [newNotif, ...prev]);
+
+    // Automatic email dispatch
+    triggerManualEmailNotification({
+      to: userEmail,
+      recipientName: userName,
+      subject: requiresApproval 
+        ? `Aviso: Transferencia en Revisión por el Gestor ($${details.amount.toFixed(2)} USD)`
+        : `Comprobante de Envío: Transferencia Aprobada ($${details.amount.toFixed(2)} USD)`,
+      preview: `Folio: ${trackingKey} para ${details.recipient}.`,
+      bodyHtml: `<div style="font-family:sans-serif;color:#1e293b;padding:24px;border-radius:12px;background:#f8fafc;border:1px solid #e2e8f0;">
+        <h2 style="color:${requiresApproval ? '#f59e0b' : '#0284c7'};margin-bottom:8px;">${requiresApproval ? 'Transferencia en Proceso de Autorización' : 'Comprobante de Débito Bancario'}</h2>
+        <p>Estimado(a) <strong>${userName}</strong>,</p>
+        <p>${requiresApproval 
+          ? 'Su transferencia ha sido enviada al sistema central y está en cola de revisión y aprobación por el Gestor del Sistema.' 
+          : 'Le confirmamos que su transferencia ha sido transmitida y debitada exitosamente de su saldo disponible.'}
+        </p>
+        <table style="width:100%;margin:16px 0;border-collapse:collapse;font-size:14px;">
+          <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;">Monto enviado:</td><td style="padding:8px 0;text-align:right;font-weight:bold;color:#dc2626;">-$${details.amount.toFixed(2)} USD</td></tr>
+          <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;">Comisión:</td><td style="padding:8px 0;text-align:right;">$${details.fee.toFixed(2)} USD</td></tr>
+          <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;">Destinatario:</td><td style="padding:8px 0;text-align:right;">${details.recipient}</td></tr>
+          <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;">Folio SPEI / Rastreo:</td><td style="padding:8px 0;text-align:right;font-family:monospace;">${trackingKey}</td></tr>
+          <tr><td style="padding:8px 0;color:#64748b;">Estado:</td><td style="padding:8px 0;text-align:right;font-weight:bold;color:${requiresApproval ? '#f59e0b' : '#059669'};">${requiresApproval ? 'Pendiente de Aprobación por Gestor' : 'Liquidada y Enviada'}</td></tr>
+        </table>
+        <p style="font-size:12px;color:#94a3b8;margin-top:16px;">Banco Gold Payments | Notificación Automática Generada al Cliente.</p>
+      </div>`,
+      type: requiresApproval ? 'transfer_pending' : 'transfer_sent',
+      amount: details.amount,
+      trackingKey,
+    });
 
     return { success: true, trackingKey };
   };
 
   const depositFunds = (amount: number, method: string) => {
     setBalance(prev => prev + amount);
+    setUsers(prev => prev.map(u => {
+      if (u.id === activeUserId) {
+        return { ...u, balance: u.balance + amount };
+      }
+      return u;
+    }));
+
     const trackingKey = generateSpeiTrackingKey();
     const now = new Date();
     const dateFormatted = 'Hoy, ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -624,6 +924,442 @@ export function BankingProvider({ children }: { children: React.ReactNode }) {
         type: 'success',
       },
       ...prev,
+    ]);
+
+    triggerManualEmailNotification({
+      to: userEmail,
+      recipientName: userName,
+      subject: `Notificación Oficial: Acreditación de Depósito ($${amount.toFixed(2)} USD)`,
+      preview: `Se han acreditado $${amount.toFixed(2)} USD vía ${method}.`,
+      bodyHtml: `<div style="font-family:sans-serif;color:#1e293b;padding:24px;border-radius:12px;background:#f8fafc;border:1px solid #e2e8f0;">
+        <h2 style="color:#059669;margin-bottom:8px;">Acreditación Confirmada</h2>
+        <p>Estimado(a) <strong>${userName}</strong>,</p>
+        <p>Se ha recibido y validado un depósito bancario a su favor.</p>
+        <table style="width:100%;margin:16px 0;border-collapse:collapse;font-size:14px;">
+          <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;">Monto Acreditado:</td><td style="padding:8px 0;text-align:right;font-weight:bold;color:#059669;">+$${amount.toFixed(2)} USD</td></tr>
+          <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;">Método de Depósito:</td><td style="padding:8px 0;text-align:right;">${method}</td></tr>
+          <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;">Folio de Operación:</td><td style="padding:8px 0;text-align:right;font-family:monospace;">${trackingKey}</td></tr>
+        </table>
+        <p style="font-size:12px;color:#94a3b8;margin-top:16px;">Banco Gold Payments | Notificaciones en Tiempo Real.</p>
+      </div>`,
+      type: 'deposit',
+      amount,
+      trackingKey,
+    });
+  };
+
+  const adminCreditAccount = (userId: string, amount: number, concept: string) => {
+    const target = users.find(u => u.id === userId);
+    if (!target) return { success: false, error: 'Usuario no encontrado' };
+
+    const trackingKey = generateSpeiTrackingKey();
+    const now = new Date();
+    const dateFormatted = 'Hoy, ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    setUsers(prev => prev.map(u => {
+      if (u.id === userId) {
+        return { ...u, balance: u.balance + amount };
+      }
+      return u;
+    }));
+
+    if (userId === activeUserId) {
+      setBalance(prev => prev + amount);
+    }
+
+    const newTx: TransactionItem = {
+      id: 'tx-adm-cr-' + Date.now(),
+      type: 'received',
+      category: 'deposit',
+      title: `Depósito Gestor: ${concept || 'Crédito Administrativo'}`,
+      recipientOrSender: 'Gestor Bancario Central (Admin)',
+      date: dateFormatted,
+      timestamp: Date.now(),
+      amount,
+      fee: 0,
+      currency: 'USD',
+      status: 'completed',
+      trackingKey,
+      reference: concept,
+    };
+
+    setTransactions(prev => [newTx, ...prev]);
+
+    setNotifications(prev => [
+      {
+        id: 'notif-' + Date.now(),
+        title: 'Depósito Acreditado por Administración',
+        message: `Se acreditaron $${amount.toFixed(2)} USD a ${target.name}. Concepto: ${concept || 'Acreditación administrativa'}.`,
+        time: 'Ahora',
+        read: false,
+        type: 'success',
+      },
+      ...prev
+    ]);
+
+    triggerManualEmailNotification({
+      to: target.email,
+      recipientName: target.name,
+      subject: `Acreditación Bancaria Exitosa: +$${amount.toFixed(2)} USD`,
+      preview: `Se han depositado $${amount.toFixed(2)} USD en su cuenta ${target.accountNumber}.`,
+      bodyHtml: `<div style="font-family:sans-serif;color:#1e293b;padding:24px;border-radius:12px;background:#f8fafc;border:1px solid #e2e8f0;">
+        <h2 style="color:#059669;margin-bottom:8px;">Acreditación de Fondos Confirmada</h2>
+        <p>Estimado(a) <strong>${target.name}</strong>,</p>
+        <p>Le informamos que el departamento de operaciones y administración ha acreditado un depósito en su cuenta bancaria.</p>
+        <table style="width:100%;margin:16px 0;border-collapse:collapse;font-size:14px;">
+          <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;">Monto acreditado:</td><td style="padding:8px 0;text-align:right;font-weight:bold;color:#059669;">+$${amount.toFixed(2)} USD</td></tr>
+          <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;">Concepto:</td><td style="padding:8px 0;text-align:right;">${concept || 'Depósito en Ventanilla / Gestor'}</td></tr>
+          <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;">Cuenta:</td><td style="padding:8px 0;text-align:right;">${target.accountNumber}</td></tr>
+          <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;">Folio de Operación:</td><td style="padding:8px 0;text-align:right;font-family:monospace;">${trackingKey}</td></tr>
+          <tr><td style="padding:8px 0;color:#64748b;">Nuevo Saldo:</td><td style="padding:8px 0;text-align:right;font-weight:bold;">$${(target.balance + amount).toFixed(2)} USD</td></tr>
+        </table>
+        <p style="font-size:12px;color:#94a3b8;margin-top:16px;">Banco Gold Payments | Notificación Automática Generada por el Sistema Gestor.</p>
+      </div>`,
+      type: 'deposit',
+      amount,
+      trackingKey,
+      reference: concept,
+    });
+
+    return { success: true, tx: newTx };
+  };
+
+  const adminDebitAccount = (userId: string, amount: number, concept: string) => {
+    const target = users.find(u => u.id === userId);
+    if (!target) return { success: false, error: 'Usuario no encontrado' };
+    if (target.balance < amount) return { success: false, error: `Saldo insuficiente. Saldo actual: $${target.balance.toFixed(2)} USD` };
+
+    const trackingKey = generateSpeiTrackingKey();
+    const now = new Date();
+    const dateFormatted = 'Hoy, ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    setUsers(prev => prev.map(u => {
+      if (u.id === userId) {
+        return { ...u, balance: u.balance - amount };
+      }
+      return u;
+    }));
+
+    if (userId === activeUserId) {
+      setBalance(prev => prev - amount);
+    }
+
+    const newTx: TransactionItem = {
+      id: 'tx-adm-db-' + Date.now(),
+      type: 'sent',
+      category: 'internal',
+      title: `Débito Administrativo: ${concept || 'Ajuste de Saldo'}`,
+      recipientOrSender: 'Gestor Bancario Central (Admin)',
+      date: dateFormatted,
+      timestamp: Date.now(),
+      amount,
+      fee: 0,
+      currency: 'USD',
+      status: 'completed',
+      trackingKey,
+      reference: concept,
+    };
+
+    setTransactions(prev => [newTx, ...prev]);
+
+    setNotifications(prev => [
+      {
+        id: 'notif-' + Date.now(),
+        title: 'Débito Procesado por Administración',
+        message: `Se aplicó un débito de -$${amount.toFixed(2)} USD a ${target.name}. Motivo: ${concept || 'Ajuste administrativo'}.`,
+        time: 'Ahora',
+        read: false,
+        type: 'alert',
+      },
+      ...prev
+    ]);
+
+    triggerManualEmailNotification({
+      to: target.email,
+      recipientName: target.name,
+      subject: `Notificación de Débito Bancario: -$${amount.toFixed(2)} USD`,
+      preview: `Se ha procesado un débito de $${amount.toFixed(2)} USD en su cuenta ${target.accountNumber}.`,
+      bodyHtml: `<div style="font-family:sans-serif;color:#1e293b;padding:24px;border-radius:12px;background:#f8fafc;border:1px solid #e2e8f0;">
+        <h2 style="color:#dc2626;margin-bottom:8px;">Notificación Oficial de Débito</h2>
+        <p>Estimado(a) <strong>${target.name}</strong>,</p>
+        <p>Se ha aplicado un débito administrativo en su cuenta bancaria de conformidad con las políticas operativas del banco.</p>
+        <table style="width:100%;margin:16px 0;border-collapse:collapse;font-size:14px;">
+          <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;">Monto debitado:</td><td style="padding:8px 0;text-align:right;font-weight:bold;color:#dc2626;">-$${amount.toFixed(2)} USD</td></tr>
+          <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;">Concepto / Causa:</td><td style="padding:8px 0;text-align:right;">${concept || 'Débito por orden administrativa'}</td></tr>
+          <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;">Folio de Débito:</td><td style="padding:8px 0;text-align:right;font-family:monospace;">${trackingKey}</td></tr>
+          <tr><td style="padding:8px 0;color:#64748b;">Saldo Remanente:</td><td style="padding:8px 0;text-align:right;font-weight:bold;">$${(target.balance - amount).toFixed(2)} USD</td></tr>
+        </table>
+        <p style="font-size:12px;color:#94a3b8;margin-top:16px;">Banco Gold Payments | Dirección de Seguridad y Cumplimiento Normativo.</p>
+      </div>`,
+      type: 'debit',
+      amount,
+      trackingKey,
+      reference: concept,
+    });
+
+    return { success: true, tx: newTx };
+  };
+
+  const adminToggleAccountBlock = (userId: string) => {
+    let newStatus: 'active' | 'blocked' = 'active';
+    let targetUser: UserAccountItem | undefined;
+
+    setUsers(prev => prev.map(u => {
+      if (u.id === userId) {
+        newStatus = u.status === 'blocked' ? 'active' : 'blocked';
+        targetUser = { ...u, status: newStatus };
+        return targetUser;
+      }
+      return u;
+    }));
+
+    if (targetUser) {
+      const isBlocked = newStatus === 'blocked';
+      setNotifications(prev => [
+        {
+          id: 'notif-' + Date.now(),
+          title: isBlocked ? 'Cuenta Bancaria Bloqueada' : 'Cuenta Bancaria Desbloqueada',
+          message: isBlocked 
+            ? `La cuenta de ${targetUser.name} ha sido bloqueada/congelada por el Gestor.` 
+            : `La cuenta de ${targetUser.name} ha sido reactivada exitosamente.`,
+          time: 'Ahora',
+          read: false,
+          type: isBlocked ? 'alert' : 'success',
+        },
+        ...prev
+      ]);
+
+      triggerManualEmailNotification({
+        to: targetUser.email,
+        recipientName: targetUser.name,
+        subject: isBlocked ? 'Aviso Importante: Cuenta Bancaria Suspendida/Bloqueada' : 'Notificación Oficial: Cuenta Bancaria Reactivada',
+        preview: isBlocked 
+          ? `Su cuenta ${targetUser.accountNumber} ha sido temporalmente restringida para transferencias.` 
+          : `Su cuenta ${targetUser.accountNumber} se encuentra plenamente operativa.`,
+        bodyHtml: `<div style="font-family:sans-serif;color:#1e293b;padding:24px;border-radius:12px;background:#f8fafc;border:1px solid #e2e8f0;">
+          <h2 style="color:${isBlocked ? '#dc2626' : '#059669'};margin-bottom:8px;">${isBlocked ? 'Estado de Cuenta: Bloqueada' : 'Estado de Cuenta: Activa y Desbloqueada'}</h2>
+          <p>Estimado(a) <strong>${targetUser.name}</strong>,</p>
+          <p>${isBlocked 
+            ? 'Le comunicamos que por motivos de seguridad y revisión de cumplimiento normativo, su cuenta ha sido congelada. Las transferencias salientes y débitos permanecerán suspendidos.' 
+            : 'Le comunicamos que su cuenta bancaria ha sido desbloqueada satisfactoriamente. Todas las operaciones de depósito, retiro y transferencias se encuentran habilitadas.'}
+          </p>
+          <p style="font-size:12px;color:#94a3b8;margin-top:16px;">Banco Gold Payments | Departamento de Seguridad y Cumplimiento.</p>
+        </div>`,
+        type: isBlocked ? 'account_blocked' : 'account_unblocked',
+      });
+    }
+
+    return { success: true, newStatus };
+  };
+
+  const adminApproveTransfer = (txId: string) => {
+    let approvedTx: TransactionItem | undefined;
+    setTransactions(prev => prev.map(tx => {
+      if (tx.id === txId) {
+        approvedTx = { ...tx, status: 'completed' };
+        return approvedTx;
+      }
+      return tx;
+    }));
+
+    if (!approvedTx) {
+      return { success: false, error: 'Transferencia no encontrada' };
+    }
+
+    setNotifications(prev => [
+      {
+        id: 'notif-' + Date.now(),
+        title: 'Transferencia Aprobada por Gestor',
+        message: `La transferencia a ${approvedTx.recipientOrSender} por $${approvedTx.amount.toFixed(2)} USD fue aprobada y liquidada.`,
+        time: 'Ahora',
+        read: false,
+        type: 'success',
+      },
+      ...prev
+    ]);
+
+    triggerManualEmailNotification({
+      to: userEmail,
+      recipientName: userName,
+      subject: `Transferencia Aprobada y Liquidada: $${approvedTx.amount.toFixed(2)} USD`,
+      preview: `Su transferencia con folio ${approvedTx.trackingKey || approvedTx.id} ha sido aprobada por el Gestor.`,
+      bodyHtml: `<div style="font-family:sans-serif;color:#1e293b;padding:24px;border-radius:12px;background:#f8fafc;border:1px solid #e2e8f0;">
+        <h2 style="color:#059669;margin-bottom:8px;">Transferencia Bancaria Liquidada con Éxito</h2>
+        <p>Estimado(a) <strong>${userName}</strong>,</p>
+        <p>Nos complace informarle que la transferencia previamente retenida en revisión ha sido <strong>APROBADA Y LIBERADA</strong> por el Gestor del Sistema.</p>
+        <table style="width:100%;margin:16px 0;border-collapse:collapse;font-size:14px;">
+          <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;">Monto enviado:</td><td style="padding:8px 0;text-align:right;font-weight:bold;color:#059669;">$${approvedTx.amount.toFixed(2)} USD</td></tr>
+          <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;">Destinatario:</td><td style="padding:8px 0;text-align:right;">${approvedTx.recipientOrSender}</td></tr>
+          <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;">Folio de Rastreo:</td><td style="padding:8px 0;text-align:right;font-family:monospace;">${approvedTx.trackingKey || approvedTx.id}</td></tr>
+          <tr><td style="padding:8px 0;color:#64748b;">Estado Final:</td><td style="padding:8px 0;text-align:right;color:#059669;font-weight:bold;">Aprobada / Liquidada</td></tr>
+        </table>
+        <p style="font-size:12px;color:#94a3b8;margin-top:16px;">Banco Gold Payments | Notificación Oficial de Liquidación de Pagos.</p>
+      </div>`,
+      type: 'transfer_approved',
+      amount: approvedTx.amount,
+      trackingKey: approvedTx.trackingKey,
+    });
+
+    return { success: true, tx: approvedTx };
+  };
+
+  const adminRejectTransfer = (txId: string, reason: string) => {
+    let rejectedTx: TransactionItem | undefined;
+    setTransactions(prev => prev.map(tx => {
+      if (tx.id === txId) {
+        rejectedTx = { ...tx, status: 'failed' };
+        return rejectedTx;
+      }
+      return tx;
+    }));
+
+    if (!rejectedTx) {
+      return { success: false, error: 'Transferencia no encontrada' };
+    }
+
+    // Refund funds back to the user
+    const refundAmount = rejectedTx.amount + rejectedTx.fee;
+    setBalance(prev => prev + refundAmount);
+    setUsers(prev => prev.map(u => {
+      if (u.id === activeUserId) {
+        return { ...u, balance: u.balance + refundAmount };
+      }
+      return u;
+    }));
+
+    setNotifications(prev => [
+      {
+        id: 'notif-' + Date.now(),
+        title: 'Transferencia Rechazada por Gestor',
+        message: `La transferencia de $${rejectedTx.amount.toFixed(2)} USD fue rechazada. Motivo: ${reason || 'Rechazo administrativo'}. Fondos reembolsados.`,
+        time: 'Ahora',
+        read: false,
+        type: 'alert',
+      },
+      ...prev
+    ]);
+
+    triggerManualEmailNotification({
+      to: userEmail,
+      recipientName: userName,
+      subject: `Notificación: Transferencia Rechazada & Reembolso Aplicado`,
+      preview: `La transferencia a ${rejectedTx.recipientOrSender} fue cancelada. Sus fondos fueron reintegrados.`,
+      bodyHtml: `<div style="font-family:sans-serif;color:#1e293b;padding:24px;border-radius:12px;background:#f8fafc;border:1px solid #e2e8f0;">
+        <h2 style="color:#dc2626;margin-bottom:8px;">Aviso de Transferencia No Autorizada</h2>
+        <p>Estimado(a) <strong>${userName}</strong>,</p>
+        <p>Le notificamos que el Gestor ha rechazado la transferencia bancaria solicitada.</p>
+        <p><strong>Motivo del rechazo:</strong> ${reason || 'Falta de validación de códigos de transferencia o inconsistencia en cuenta destino.'}</p>
+        <table style="width:100%;margin:16px 0;border-collapse:collapse;font-size:14px;">
+          <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;">Monto devuelto:</td><td style="padding:8px 0;text-align:right;font-weight:bold;color:#059669;">+$${refundAmount.toFixed(2)} USD</td></tr>
+          <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;">Folio:</td><td style="padding:8px 0;text-align:right;font-family:monospace;">${rejectedTx.trackingKey || rejectedTx.id}</td></tr>
+        </table>
+        <p style="font-size:12px;color:#94a3b8;margin-top:16px;">Los fondos han sido reintegrados a su saldo disponible. Banco Gold Payments.</p>
+      </div>`,
+      type: 'transfer_rejected',
+      amount: rejectedTx.amount,
+      trackingKey: rejectedTx.trackingKey,
+    });
+
+    return { success: true, tx: rejectedTx };
+  };
+
+  const updateSecurityConfig = (config: Partial<TransferSecurityConfig>) => {
+    setSecurityConfig(prev => ({ ...prev, ...config }));
+    setNotifications(prev => [
+      {
+        id: 'notif-sec-' + Date.now(),
+        title: 'Políticas de Seguridad Actualizadas',
+        message: 'Se actualizaron los requerimientos de códigos de transferencia (IMF, COT, SWIFT).',
+        time: 'Ahora',
+        read: false,
+        type: 'info',
+      },
+      ...prev
+    ]);
+  };
+
+  const registerNewUser = (data: {
+    name: string;
+    email: string;
+    phone?: string;
+    initialDeposit?: number;
+    tier?: 'Personal' | 'Premier' | 'Empresarial';
+  }) => {
+    const newClabe = generateValidClabe();
+    const newAccNum = 'GP-' + Math.floor(1000 + Math.random() * 9000) + '-' + Math.floor(1000 + Math.random() * 9000);
+    const deposit = data.initialDeposit || 0;
+
+    const newUser: UserAccountItem = {
+      id: 'usr-' + Date.now(),
+      name: data.name,
+      email: data.email,
+      phone: data.phone || '+52 55 ' + Math.floor(10000000 + Math.random() * 90000000),
+      accountNumber: newAccNum,
+      clabe: newClabe,
+      balance: deposit,
+      status: 'active',
+      role: 'user',
+      tier: data.tier || 'Personal',
+      createdAt: 'Hoy',
+      totalTransfers: deposit > 0 ? 1 : 0,
+    };
+
+    setUsers(prev => [newUser, ...prev]);
+
+    setNotifications(prev => [
+      {
+        id: 'notif-' + Date.now(),
+        title: 'Nueva Cuenta Bancaria Registrada',
+        message: `Se ha dado de alta exitosamente la cuenta de ${data.name} (${newAccNum}).`,
+        time: 'Ahora',
+        read: false,
+        type: 'success',
+      },
+      ...prev
+    ]);
+
+    triggerManualEmailNotification({
+      to: data.email,
+      recipientName: data.name,
+      subject: `Bienvenido a Banco Gold Payments - Apertura de Cuenta`,
+      preview: `Su cuenta ${newAccNum} ha sido abierta con saldo inicial de $${deposit.toFixed(2)} USD.`,
+      bodyHtml: `<div style="font-family:sans-serif;color:#1e293b;padding:24px;border-radius:12px;background:#f8fafc;border:1px solid #e2e8f0;">
+        <h2 style="color:#0284c7;margin-bottom:8px;">Bienvenido a Banco Gold Payments</h2>
+        <p>Estimado(a) <strong>${data.name}</strong>,</p>
+        <p>Su registro ha sido completado y su cuenta de banca en línea está activa.</p>
+        <table style="width:100%;margin:16px 0;border-collapse:collapse;font-size:14px;">
+          <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;">Número de Cuenta:</td><td style="padding:8px 0;text-align:right;font-weight:bold;">${newAccNum}</td></tr>
+          <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;">CLABE Interbancaria:</td><td style="padding:8px 0;text-align:right;font-family:monospace;">${newClabe}</td></tr>
+          <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;">Saldo Inicial:</td><td style="padding:8px 0;text-align:right;font-weight:bold;color:#059669;">$${deposit.toFixed(2)} USD</td></tr>
+        </table>
+        <p style="font-size:12px;color:#94a3b8;margin-top:16px;">Banco Gold Payments | Plataforma Integral de Servicios Financieros.</p>
+      </div>`,
+      type: 'deposit',
+      amount: deposit,
+    });
+
+    return newUser;
+  };
+
+  const switchUser = (userId: string) => {
+    const target = users.find(u => u.id === userId);
+    if (!target) return;
+    setActiveUserId(userId);
+    setBalance(target.balance);
+    setUserName(target.name);
+    setUserEmail(target.email);
+    setUserPhone(target.phone);
+    setUserClabe(target.clabe);
+    setNotifications(prev => [
+      {
+        id: 'notif-sw-' + Date.now(),
+        title: 'Sesión Cambiada',
+        message: `Ahora estás operando como ${target.name} (${target.accountNumber}).`,
+        time: 'Ahora',
+        read: false,
+        type: 'info',
+      },
+      ...prev
     ]);
   };
 
@@ -1190,6 +1926,119 @@ export function BankingProvider({ children }: { children: React.ReactNode }) {
     };
   };
 
+  const executeMercadoPagoWithdrawal = async (params: {
+    amountMxn?: number;
+    amountUsd?: number;
+    clabe?: string;
+    recipientName?: string;
+    concept?: string;
+    rfc?: string;
+  }) => {
+    let finalAmountMxn = params.amountMxn || 0;
+    let finalAmountUsd = params.amountUsd || 0;
+
+    if (finalAmountMxn > 0 && finalAmountUsd === 0) {
+      finalAmountUsd = Number((finalAmountMxn / usdToMxnRate).toFixed(2));
+    } else if (finalAmountUsd > 0 && finalAmountMxn === 0) {
+      finalAmountMxn = Number((finalAmountUsd * usdToMxnRate).toFixed(2));
+    }
+
+    if (finalAmountUsd <= 0) {
+      return { success: false, trackingKey: '', error: 'El monto a retirar debe ser mayor a cero.' };
+    }
+
+    if (finalAmountUsd > balance) {
+      return {
+        success: false,
+        trackingKey: '',
+        error: `Saldo insuficiente ($${balance.toLocaleString('en-US', { minimumFractionDigits: 2 })} USD disponible). Se requieren $${finalAmountUsd.toLocaleString('en-US', { minimumFractionDigits: 2 })} USD ($${finalAmountMxn.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN).`,
+      };
+    }
+
+    const targetClabe = params.clabe || userClabe;
+
+    try {
+      const res = await fetch('/api/mercadopago/withdraw', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amountMxn: finalAmountMxn,
+          amountUsd: finalAmountUsd,
+          clabe: targetClabe,
+          recipientName: params.recipientName || userName,
+          concept: params.concept || `Retiro SPEI a CLABE ${targetClabe}`,
+          rfc: params.rfc || 'XAXX010101000',
+          email: userEmail,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok || !data.success) {
+        return {
+          success: false,
+          trackingKey: '',
+          error: data.error || data.message || 'Error al procesar el retiro en Mercado Pago.',
+        };
+      }
+
+      // Deduct balance upon successful withdrawal
+      setBalance(prev => +(prev - finalAmountUsd).toFixed(2));
+
+      const now = new Date();
+      const dateFormatted = 'Hoy, ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      const bankLabel = data.bankName || 'Banco Nacional SPEI';
+
+      const newTx: TransactionItem = {
+        id: 'tx-mp-' + Date.now(),
+        type: 'sent',
+        category: 'spei',
+        title: `Retiro SPEI a CLABE - Mercado Pago (${finalAmountMxn.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN)`,
+        recipientOrSender: `${params.recipientName || userName} (${bankLabel} - ••••${targetClabe.slice(-4)})`,
+        date: dateFormatted,
+        timestamp: Date.now(),
+        amount: finalAmountUsd,
+        fee: 0,
+        currency: 'USD',
+        status: 'completed',
+        trackingKey: data.trackingKey,
+        clabe: targetClabe,
+        bankName: bankLabel,
+        reference: data.mercadoPagoPaymentId || data.authorizationCode,
+        destinationCurrency: 'MXN',
+        destinationAmount: finalAmountMxn,
+      };
+
+      setTransactions(prev => [newTx, ...prev]);
+
+      setNotifications(prev => [
+        {
+          id: 'notif-mp-withdraw-' + Date.now(),
+          title: 'Retiro Mercado Pago Liquidado',
+          message: `Se enviaron exitosamente $${finalAmountMxn.toLocaleString('es-MX', { minimumFractionDigits: 2 })} MXN a la cuenta CLABE ${targetClabe} (${bankLabel}) mediante tu cuenta Mercado Pago. Folio: ${data.trackingKey}`,
+          time: 'Ahora',
+          read: false,
+          type: 'success',
+        },
+        ...prev,
+      ]);
+
+      return {
+        success: true,
+        trackingKey: data.trackingKey,
+        mpPaymentId: data.mercadoPagoPaymentId,
+        mode: data.mode,
+        tx: newTx,
+      };
+    } catch (fetchErr: any) {
+      return {
+        success: false,
+        trackingKey: '',
+        error: fetchErr.message || 'Error de red al conectar con el servicio de Mercado Pago.',
+      };
+    }
+  };
+
   return (
     <BankingContext.Provider
       value={{
@@ -1238,6 +2087,21 @@ export function BankingProvider({ children }: { children: React.ReactNode }) {
         sendMorseAchTransfer,
         usdToMxnRate,
         executePlus500Payment,
+        executeMercadoPagoWithdrawal,
+        isAccountBlocked,
+        users,
+        activeUserId,
+        securityConfig,
+        emailLogs,
+        adminCreditAccount,
+        adminDebitAccount,
+        adminToggleAccountBlock,
+        adminApproveTransfer,
+        adminRejectTransfer,
+        updateSecurityConfig,
+        registerNewUser,
+        switchUser,
+        triggerManualEmailNotification,
       }}
     >
       {children}

@@ -21,6 +21,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useBanking } from '@/lib/bankingStore';
 import { validateClabe, validateAbaRouting, validateAchAccount, MORSE_DEFAULT_BENEFICIARY } from '@/lib/bankingValidation';
+import MercadoPagoWithdrawModal from '@/components/MercadoPagoWithdrawModal';
 
 type SettingsTab = 'profile' | 'security' | 'clabe' | 'kyc' | 'morse';
 
@@ -39,6 +40,7 @@ export default function SettingsView() {
   } = useBanking();
 
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
+  const [isMpWithdrawModalOpen, setIsMpWithdrawModalOpen] = useState(false);
 
   // Morse settings state
   const [morseRouting, setMorseRouting] = useState(morseBeneficiary.routingNumber);
@@ -355,6 +357,57 @@ export default function SettingsView() {
                   >
                     <RefreshCw size={14} />
                     <span>Generar Nueva CLABE Válida</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Mercado Pago SPEI Withdrawal Integration Card */}
+              <div className="p-6 rounded-2xl bg-neutral-950 border border-sky-500/30 space-y-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-sky-500/10 flex items-center justify-center text-sky-400 font-bold text-lg">
+                      MP
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-sm text-neutral-200">
+                        Dispersión Directa a CLABE con Mercado Pago
+                      </h3>
+                      <p className="text-xs text-neutral-400 mt-0.5">
+                        Conecta tus retiros con tu cuenta oficial de Mercado Pago para enviar MXN mediante SPEI a tu CLABE registrada.
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-[10px] bg-sky-500/10 text-sky-400 border border-sky-500/20 px-2.5 py-1 rounded-full font-bold shrink-0">
+                    SPEI Activo
+                  </span>
+                </div>
+
+                <div className="p-4 bg-neutral-900 rounded-xl border border-neutral-800 text-xs text-neutral-300 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-neutral-400">Cuenta CLABE de Destino:</span>
+                    <span className="font-mono font-bold text-amber-400">{userClabe}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-neutral-400">Canal de Liquidación:</span>
+                    <span className="font-semibold text-emerald-400">SPEI Banco de México / API Mercado Pago</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-neutral-400">Tiempo de Acreditación:</span>
+                    <span className="text-neutral-200">Inmediato (24/7 los 365 días)</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-1">
+                  <p className="text-[11px] text-neutral-500">
+                    Las órdenes de retiro descuentan tu balance USD y dispersan los fondos en pesos mexicanos (MXN).
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setIsMpWithdrawModalOpen(true)}
+                    className="px-4 py-2 bg-gradient-to-r from-sky-500 to-sky-600 hover:from-sky-400 hover:to-sky-500 text-neutral-950 font-bold rounded-xl text-xs transition-all shadow-md shadow-sky-500/20 flex items-center gap-1.5 cursor-pointer shrink-0"
+                  >
+                    <span>Solicitar Retiro a CLABE</span>
+                    <span>&rarr;</span>
                   </button>
                 </div>
               </div>
@@ -693,6 +746,12 @@ export default function SettingsView() {
           </div>
         </div>
       )}
+
+      {/* Mercado Pago SPEI Withdrawal Modal */}
+      <MercadoPagoWithdrawModal
+        isOpen={isMpWithdrawModalOpen}
+        onClose={() => setIsMpWithdrawModalOpen(false)}
+      />
     </div>
   );
 }

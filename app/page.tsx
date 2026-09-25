@@ -33,12 +33,14 @@ import SettingsView from '@/components/views/SettingsView';
 import MeruView from '@/components/views/MeruView';
 import MidsView from '@/components/views/MidsView';
 import MorseView from '@/components/views/MorseView';
+import AdminView from '@/components/views/AdminView';
+import LiveSupportChat from '@/components/LiveSupportChat';
 import TransactionReceiptModal from '@/components/TransactionReceiptModal';
 import Plus500PaymentModal from '@/components/Plus500PaymentModal';
 import { cn } from '@/lib/utils';
 import { BankingProvider, useBanking, TransactionItem } from '@/lib/bankingStore';
 
-type View = 'dashboard' | 'transfer' | 'cards' | 'crypto' | 'loans' | 'settings' | 'meru' | 'mids' | 'morse';
+type View = 'dashboard' | 'admin' | 'transfer' | 'cards' | 'crypto' | 'loans' | 'settings' | 'meru' | 'mids' | 'morse';
 
 function BankingAppContent() {
   const { 
@@ -47,12 +49,16 @@ function BankingAppContent() {
     notifications, 
     markNotificationsAsRead, 
     transactions,
-    cards
+    cards,
+    users,
+    activeUserId,
+    switchUser,
   } = useBanking();
 
   const [activeView, setActiveView] = useState<View>('dashboard');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
+  const [isUserSwitcherOpen, setIsUserSwitcherOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSignOutModalOpen, setIsSignOutModalOpen] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
@@ -60,11 +66,18 @@ function BankingAppContent() {
   const [selectedReceiptTx, setSelectedReceiptTx] = useState<TransactionItem | null>(null);
 
   const unreadCount = notifications.filter(n => !n.read).length;
+  const pendingApprovalsCount = transactions.filter(t => t.status === 'pending').length;
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'morse', label: 'Beneficiario Morse', icon: Send, badge: 'ACH' },
+    { 
+      id: 'admin', 
+      label: 'Panel Gestor (Admin)', 
+      icon: ShieldCheck, 
+      badge: pendingApprovalsCount > 0 ? `${pendingApprovalsCount} PEND.` : 'GESTOR' 
+    },
     { id: 'transfer', label: 'Transferencias SPEI / SEPA', icon: ArrowRightLeft },
+    { id: 'morse', label: 'Beneficiario Morse', icon: Send, badge: 'ACH' },
     { id: 'mids', label: 'Comercios (MIDs)', icon: Building2, badge: 'PROD' },
     { id: 'meru', label: 'Depósito Meru', icon: ShieldCheck, badge: '1,720 MXN' },
     { id: 'cards', label: 'Tarjetas Virtuales', icon: CreditCard },
@@ -76,6 +89,7 @@ function BankingAppContent() {
   const renderView = () => {
     switch (activeView) {
       case 'dashboard': return <DashboardView onNavigate={setActiveView} />;
+      case 'admin': return <AdminView />;
       case 'morse': return <MorseView onBack={() => setActiveView('dashboard')} onNavigate={setActiveView} />;
       case 'mids': return <MidsView onNavigate={setActiveView} />;
       case 'meru': return <MeruView onBack={() => setActiveView('dashboard')} onNavigate={setActiveView} />;
@@ -369,6 +383,79 @@ function BankingAppContent() {
 
           {/* Right Header Controls */}
           <div className="flex items-center gap-3 relative">
+            {/* User Profile & Switcher */}
+            <div className="relative">
+              <button
+                onClick={() => setIsUserSwitcherOpen(!isUserSwitcherOpen)}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-neutral-900 hover:bg-neutral-850 border border-neutral-800 text-xs text-neutral-200 transition-colors cursor-pointer"
+              >
+                <div className="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 font-bold flex items-center justify-center text-[10px]">
+                  {userName.charAt(0)}
+                </div>
+                <span className="font-semibold max-w-[110px] truncate">{userName}</span>
+                <span className="text-[10px] text-neutral-500 font-mono">▼</span>
+              </button>
+
+              <AnimatePresence>
+                {isUserSwitcherOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                    className="absolute right-0 top-full mt-2 w-72 bg-neutral-900 border border-neutral-800 rounded-2xl p-2.5 shadow-2xl z-50 text-xs space-y-1.5"
+                  >
+                    <div className="px-2.5 py-1 text-[10px] uppercase font-bold text-neutral-400 border-b border-neutral-800 flex justify-between items-center">
+                      <span>Cuentas del Sistema</span>
+                      <span className="text-emerald-400 font-mono">{users.length} cuentas</span>
+                    </div>
+
+                    <div className="max-h-60 overflow-y-auto space-y-1">
+                      {users.map((u) => (
+                        <div
+                          key={u.id}
+                          onClick={() => {
+                            switchUser(u.id);
+                            setIsUserSwitcherOpen(false);
+                          }}
+                          className={`p-2 rounded-xl cursor-pointer flex items-center justify-between transition-colors ${
+                            u.id === activeUserId
+                              ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-bold'
+                              : 'hover:bg-neutral-800 text-neutral-300'
+                          }`}
+                        >
+                          <div>
+                            <p className="font-semibold flex items-center gap-1">
+                              {u.name}
+                              {u.status === 'blocked' && (
+                                <span className="text-[9px] px-1 rounded bg-red-500/20 text-red-300">Bloqueada</span>
+                              )}
+                            </p>
+                            <p className="text-[10px] text-neutral-500 font-mono">{u.accountNumber}</p>
+                          </div>
+                          <span className="text-[11px] font-mono text-emerald-400 font-bold">
+                            ${u.balance.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="pt-1.5 border-t border-neutral-800">
+                      <button
+                        onClick={() => {
+                          setActiveView('admin');
+                          setIsUserSwitcherOpen(false);
+                        }}
+                        className="w-full text-left px-2.5 py-1.5 rounded-lg text-emerald-400 hover:bg-emerald-500/10 font-bold text-[11px] flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <ShieldCheck size={14} />
+                        Acceder al Panel Gestor Central
+                      </button>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+
             <button
               id="header-pay-plus500-btn"
               onClick={() => setIsPlus500ModalOpen(true)}
@@ -550,6 +637,9 @@ function BankingAppContent() {
         transaction={selectedReceiptTx}
         onClose={() => setSelectedReceiptTx(null)}
       />
+
+      {/* 24/7 Live Support Customer Chat */}
+      <LiveSupportChat />
     </div>
   );
 }

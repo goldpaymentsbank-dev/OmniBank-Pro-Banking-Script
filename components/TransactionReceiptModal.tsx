@@ -18,11 +18,14 @@ import {
   Lock,
   BadgeCheck,
   FileText,
-  AlertCircle
+  AlertCircle,
+  Download,
+  RotateCw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { TransactionItem } from '@/lib/bankingStore';
 import { cn } from '@/lib/utils';
+import { generateTransactionPdf } from '@/lib/receiptPdf';
 
 interface TransactionReceiptModalProps {
   transaction: TransactionItem | null;
@@ -34,6 +37,7 @@ export default function TransactionReceiptModal({
   onClose
 }: TransactionReceiptModalProps) {
   const [copiedField, setCopiedField] = useState<string | null>(null);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const modalRef = useRef<HTMLDivElement>(null);
 
   // Close on Escape key
@@ -61,6 +65,18 @@ export default function TransactionReceiptModal({
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleDownloadPdf = () => {
+    if (!transaction) return;
+    try {
+      setIsGeneratingPdf(true);
+      generateTransactionPdf(transaction);
+    } catch (err) {
+      console.error('Error al generar el comprobante PDF:', err);
+    } finally {
+      setTimeout(() => setIsGeneratingPdf(false), 600);
+    }
   };
 
   // Generate deterministic digital signature & authorization code from transaction properties
@@ -121,7 +137,7 @@ Certificado emitido bajo normas ISO 20022 y Banco de México.
     <AnimatePresence>
       <div 
         id="transaction-receipt-modal-backdrop"
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 sm:p-6 overflow-y-auto print:static print:bg-white print:p-0 print:block"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-3 sm:p-6 overflow-y-auto print:static print:bg-white print:p-0 print:block print:inset-auto"
         onClick={(e) => {
           if (e.target === e.currentTarget) onClose();
         }}
@@ -129,7 +145,32 @@ Certificado emitido bajo normas ISO 20022 y Banco de México.
         aria-modal="true"
         aria-labelledby="receipt-title"
       >
+        <style dangerouslySetInnerHTML={{ __html: `
+          @media print {
+            body > *:not(#transaction-receipt-modal-backdrop) {
+              display: none !important;
+            }
+            #transaction-receipt-modal-backdrop {
+              position: static !important;
+              background: #ffffff !important;
+              padding: 0 !important;
+              margin: 0 !important;
+              display: block !important;
+              overflow: visible !important;
+            }
+            #transaction-receipt-modal-card {
+              max-width: 100% !important;
+              width: 100% !important;
+              border: none !important;
+              box-shadow: none !important;
+              border-radius: 0 !important;
+              background: #ffffff !important;
+              color: #000000 !important;
+            }
+          }
+        `}} />
         <motion.div
+          id="transaction-receipt-modal-card"
           initial={{ opacity: 0, scale: 0.95, y: 15 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 15 }}
@@ -143,14 +184,30 @@ Certificado emitido bajo normas ISO 20022 y Banco de México.
               <FileText size={18} />
               <span>Comprobante de Operación Bancaria</span>
             </div>
-            <button
-              id="close-receipt-modal-btn"
-              onClick={onClose}
-              className="p-2 rounded-xl text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800 transition-colors"
-              aria-label="Cerrar modal"
-            >
-              <X size={18} />
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                id="top-download-pdf-btn"
+                onClick={handleDownloadPdf}
+                disabled={isGeneratingPdf}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-xs font-semibold transition-colors disabled:opacity-50"
+                title="Descargar Comprobante en PDF"
+              >
+                {isGeneratingPdf ? (
+                  <RotateCw size={13} className="animate-spin text-amber-300" />
+                ) : (
+                  <Download size={13} />
+                )}
+                <span>Descargar PDF</span>
+              </button>
+              <button
+                id="close-receipt-modal-btn"
+                onClick={onClose}
+                className="p-2 rounded-xl text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800 transition-colors"
+                aria-label="Cerrar modal"
+              >
+                <X size={18} />
+              </button>
+            </div>
           </div>
 
           {/* Printable Receipt Paper Container */}
@@ -445,32 +502,54 @@ Certificado emitido bajo normas ISO 20022 y Banco de México.
           </div>
 
           {/* Action Toolbar (Screen only, hidden in print) */}
-          <div className="p-4 sm:p-6 bg-neutral-950 border-t border-neutral-800 flex flex-col sm:flex-row gap-3 print:hidden">
+          <div className="p-4 sm:p-6 bg-neutral-950 border-t border-neutral-800 flex flex-col sm:flex-row gap-2.5 print:hidden">
+            <button
+              id="download-receipt-pdf-btn"
+              type="button"
+              onClick={handleDownloadPdf}
+              disabled={isGeneratingPdf}
+              className="flex-1 flex items-center justify-center gap-2 py-3 px-4 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-neutral-950 font-bold rounded-xl transition-all text-xs shadow-lg shadow-amber-500/20 active:scale-[0.99] disabled:opacity-50 cursor-pointer"
+            >
+              {isGeneratingPdf ? (
+                <>
+                  <RotateCw size={16} className="animate-spin text-neutral-950" />
+                  <span>Generando PDF...</span>
+                </>
+              ) : (
+                <>
+                  <Download size={16} />
+                  <span>Descargar en PDF</span>
+                </>
+              )}
+            </button>
+
             <button
               id="print-receipt-btn"
               type="button"
               onClick={handlePrint}
-              className="flex-1 flex items-center justify-center gap-2 py-3 px-4 bg-amber-500 text-neutral-950 font-bold rounded-xl hover:bg-amber-400 transition-colors text-xs shadow-lg shadow-amber-500/10"
+              className="flex-1 flex items-center justify-center gap-2 py-3 px-4 bg-neutral-800 hover:bg-neutral-700 text-neutral-100 font-semibold rounded-xl border border-neutral-700 transition-colors text-xs cursor-pointer"
+              title="Abrir cuadro de diálogo de impresión para imprimir o guardar como PDF"
             >
               <Printer size={16} />
-              <span>Imprimir Comprobante</span>
+              <span>Imprimir / Guardar en PDF</span>
             </button>
 
             <button
               id="copy-receipt-summary-btn"
               type="button"
               onClick={() => copyToClipboard(receiptSummaryText, 'all')}
-              className="flex-1 flex items-center justify-center gap-2 py-3 px-4 bg-neutral-800 text-neutral-200 font-semibold rounded-xl hover:bg-neutral-700 transition-colors text-xs"
+              className="flex items-center justify-center gap-1.5 py-3 px-3.5 bg-neutral-900 border border-neutral-800 text-neutral-300 font-medium rounded-xl hover:bg-neutral-850 hover:text-white transition-colors text-xs cursor-pointer"
+              title="Copiar texto oficial del comprobante al portapapeles"
             >
               {copiedField === 'all' ? (
                 <>
-                  <Check size={16} className="text-emerald-400" />
-                  <span className="text-emerald-400">Resumen Copiado ✓</span>
+                  <Check size={15} className="text-emerald-400" />
+                  <span className="text-emerald-400 font-semibold">Copiado</span>
                 </>
               ) : (
                 <>
-                  <Copy size={16} />
-                  <span>Copiar Comprobante</span>
+                  <Copy size={15} />
+                  <span>Copiar</span>
                 </>
               )}
             </button>
@@ -479,7 +558,7 @@ Certificado emitido bajo normas ISO 20022 y Banco de México.
               id="close-receipt-btn"
               type="button"
               onClick={onClose}
-              className="py-3 px-5 bg-neutral-900 border border-neutral-800 text-neutral-300 font-medium rounded-xl hover:bg-neutral-850 hover:text-white transition-colors text-xs"
+              className="py-3 px-4 bg-neutral-900 border border-neutral-800 text-neutral-400 font-medium rounded-xl hover:bg-neutral-850 hover:text-neutral-200 transition-colors text-xs cursor-pointer"
             >
               Cerrar
             </button>
