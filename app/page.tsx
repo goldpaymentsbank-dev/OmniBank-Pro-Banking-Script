@@ -22,7 +22,10 @@ import {
   Lock,
   ExternalLink,
   ShieldCheck,
-  Send
+  Send,
+  Globe2,
+  Fingerprint,
+  Scan
 } from 'lucide-react';
 import DashboardView from '@/components/views/DashboardView';
 import TransferView from '@/components/views/TransferView';
@@ -34,13 +37,15 @@ import MeruView from '@/components/views/MeruView';
 import MidsView from '@/components/views/MidsView';
 import MorseView from '@/components/views/MorseView';
 import AdminView from '@/components/views/AdminView';
+import SwiftView from '@/components/views/SwiftView';
 import LiveSupportChat from '@/components/LiveSupportChat';
 import TransactionReceiptModal from '@/components/TransactionReceiptModal';
 import Plus500PaymentModal from '@/components/Plus500PaymentModal';
+import BiometricAuthModal from '@/components/BiometricAuthModal';
 import { cn } from '@/lib/utils';
 import { BankingProvider, useBanking, TransactionItem } from '@/lib/bankingStore';
 
-type View = 'dashboard' | 'admin' | 'transfer' | 'cards' | 'crypto' | 'loans' | 'settings' | 'meru' | 'mids' | 'morse';
+type View = 'dashboard' | 'admin' | 'swift' | 'transfer' | 'cards' | 'crypto' | 'loans' | 'settings' | 'meru' | 'mids' | 'morse';
 
 function BankingAppContent() {
   const { 
@@ -62,6 +67,7 @@ function BankingAppContent() {
   const [searchQuery, setSearchQuery] = useState('');
   const [isSignOutModalOpen, setIsSignOutModalOpen] = useState(false);
   const [isLocked, setIsLocked] = useState(false);
+  const [isBiometricUnlockOpen, setIsBiometricUnlockOpen] = useState(false);
   const [isPlus500ModalOpen, setIsPlus500ModalOpen] = useState(true);
   const [selectedReceiptTx, setSelectedReceiptTx] = useState<TransactionItem | null>(null);
 
@@ -76,6 +82,7 @@ function BankingAppContent() {
       icon: ShieldCheck, 
       badge: pendingApprovalsCount > 0 ? `${pendingApprovalsCount} PEND.` : 'GESTOR' 
     },
+    { id: 'swift', label: 'Códigos Swift/BIC & Wise', icon: Globe2, badge: 'WISE 96H' },
     { id: 'transfer', label: 'Transferencias SPEI / SEPA', icon: ArrowRightLeft },
     { id: 'morse', label: 'Beneficiario Morse', icon: Send, badge: 'ACH' },
     { id: 'mids', label: 'Comercios (MIDs)', icon: Building2, badge: 'PROD' },
@@ -90,6 +97,7 @@ function BankingAppContent() {
     switch (activeView) {
       case 'dashboard': return <DashboardView onNavigate={setActiveView} />;
       case 'admin': return <AdminView />;
+      case 'swift': return <SwiftView onNavigate={setActiveView} />;
       case 'morse': return <MorseView onBack={() => setActiveView('dashboard')} onNavigate={setActiveView} />;
       case 'mids': return <MidsView onNavigate={setActiveView} />;
       case 'meru': return <MeruView onBack={() => setActiveView('dashboard')} onNavigate={setActiveView} />;
@@ -613,17 +621,42 @@ function BankingAppContent() {
             </div>
             <div>
               <h2 className="text-xl font-bold text-neutral-100">Sesión Bloqueada</h2>
-              <p className="text-xs text-neutral-400 mt-1">Ingresa para reanudar el acceso a Gold Payments Bank</p>
+              <p className="text-xs text-neutral-400 mt-1">
+                Autentícate con biometría FIDO2 para reanudar el acceso a Gold Payments Bank.
+              </p>
             </div>
-            <button 
-              onClick={() => setIsLocked(false)}
-              className="w-full py-3.5 bg-amber-500 text-neutral-950 font-bold rounded-xl hover:bg-amber-400 transition-colors text-sm shadow-lg shadow-amber-500/10"
-            >
-              Desbloquear Cuenta
-            </button>
+            <div className="space-y-2.5">
+              <button 
+                id="unlock-with-biometrics-btn"
+                onClick={() => setIsBiometricUnlockOpen(true)}
+                className="w-full py-3.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-neutral-950 font-bold rounded-xl transition-all text-xs sm:text-sm shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2 cursor-pointer"
+              >
+                <Fingerprint size={18} />
+                <span>Desbloquear con FaceID / Huella</span>
+              </button>
+              <button 
+                id="quick-unlock-btn"
+                onClick={() => setIsLocked(false)}
+                className="w-full py-2.5 bg-neutral-800 hover:bg-neutral-750 text-neutral-300 font-semibold rounded-xl transition-colors text-xs cursor-pointer"
+              >
+                Desbloquear con Contraseña
+              </button>
+            </div>
           </div>
         </div>
       )}
+
+      {/* Simulated Biometric Authentication Overlay */}
+      <BiometricAuthModal
+        isOpen={isBiometricUnlockOpen}
+        mode="unlock"
+        userName={userName}
+        onSuccess={() => {
+          setIsLocked(false);
+          setIsBiometricUnlockOpen(false);
+        }}
+        onCancel={() => setIsBiometricUnlockOpen(false)}
+      />
 
       {/* Plus500 Direct Payment Modal */}
       <Plus500PaymentModal

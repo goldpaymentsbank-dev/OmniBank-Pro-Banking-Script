@@ -31,6 +31,7 @@ import {
 } from 'lucide-react';
 import { useBanking, UserAccountItem, TransactionItem, EmailNotificationLog } from '@/lib/bankingStore';
 import EmailNotificationModal from '@/components/EmailNotificationModal';
+import MercadoPagoProductionInspector from '@/components/MercadoPagoProductionInspector';
 
 export default function AdminView() {
   const {
@@ -49,7 +50,7 @@ export default function AdminView() {
     switchUser,
   } = useBanking();
 
-  const [activeTab, setActiveTab] = useState<'users' | 'approvals' | 'security' | 'emails'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'approvals' | 'security' | 'emails' | 'mercadopago'>('users');
   const [searchQuery, setSearchQuery] = useState('');
   const [userFilter, setUserFilter] = useState<'all' | 'active' | 'blocked'>('all');
 
@@ -347,6 +348,18 @@ export default function AdminView() {
         >
           <Mail className="w-4 h-4" />
           Registro de Correos Automáticos ({emailLogs.length})
+        </button>
+
+        <button
+          onClick={() => setActiveTab('mercadopago')}
+          className={`flex items-center gap-2 px-4 py-3 text-xs font-semibold border-b-2 transition-all cursor-pointer shrink-0 ${
+            activeTab === 'mercadopago'
+              ? 'border-emerald-500 text-emerald-400 bg-emerald-500/5'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <ShieldCheck className="w-4 h-4 text-amber-400" />
+          Mercado Pago (PRODUCCIÓN LIVE)
         </button>
       </div>
 
@@ -854,6 +867,11 @@ export default function AdminView() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* TAB 5: MERCADO PAGO PRODUCCIÓN LIVE & WEBHOOKS */}
+      {activeTab === 'mercadopago' && (
+        <MercadoPagoProductionInspector />
       )}
 
       {/* MODAL: REALIZAR DEPÓSITO */}

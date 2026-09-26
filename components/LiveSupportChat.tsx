@@ -94,8 +94,8 @@ export default function LiveSupportChat() {
     const text = (textToSend || inputMessage).trim();
     if (!text) return;
 
-    chatMsgCounter += 1;
-    const msgId = 'msg-u-' + chatMsgCounter;
+    msgCounterRef.current += 1;
+    const msgId = 'msg-u-' + msgCounterRef.current;
     const nowTime = 'Ahora';
 
     const userMsg: ChatMessage = {
@@ -132,8 +132,8 @@ export default function LiveSupportChat() {
         botResponse = `Entendido. Tu solicitud ha sido registrada en el sistema de tickets de Banco Gold Payments. Si se trata de una transferencia o validación de códigos (COT/IMF), recuerda que puedes gestionarla directamente en el Panel Gestor. ¿Hay algo más en lo que te podamos ayudar?`;
       }
 
-      chatMsgCounter += 1;
-      const botId = 'bot-' + chatMsgCounter;
+      msgCounterRef.current += 1;
+      const botId = 'bot-' + msgCounterRef.current;
       setMessages(prev => [
         ...prev,
         {

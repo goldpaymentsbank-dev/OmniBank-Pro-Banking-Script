@@ -1101,70 +1101,60 @@ export function BankingProvider({ children }: { children: React.ReactNode }) {
   };
 
   const adminToggleAccountBlock = (userId: string) => {
-    let newStatus: 'active' | 'blocked' = 'active';
-    let targetUser: UserAccountItem | undefined;
-
-    setUsers(prev => prev.map(u => {
-      if (u.id === userId) {
-        newStatus = u.status === 'blocked' ? 'active' : 'blocked';
-        targetUser = { ...u, status: newStatus };
-        return targetUser;
-      }
-      return u;
-    }));
-
-    if (targetUser) {
-      const isBlocked = newStatus === 'blocked';
-      setNotifications(prev => [
-        {
-          id: 'notif-' + Date.now(),
-          title: isBlocked ? 'Cuenta Bancaria Bloqueada' : 'Cuenta Bancaria Desbloqueada',
-          message: isBlocked 
-            ? `La cuenta de ${targetUser.name} ha sido bloqueada/congelada por el Gestor.` 
-            : `La cuenta de ${targetUser.name} ha sido reactivada exitosamente.`,
-          time: 'Ahora',
-          read: false,
-          type: isBlocked ? 'alert' : 'success',
-        },
-        ...prev
-      ]);
-
-      triggerManualEmailNotification({
-        to: targetUser.email,
-        recipientName: targetUser.name,
-        subject: isBlocked ? 'Aviso Importante: Cuenta Bancaria Suspendida/Bloqueada' : 'Notificación Oficial: Cuenta Bancaria Reactivada',
-        preview: isBlocked 
-          ? `Su cuenta ${targetUser.accountNumber} ha sido temporalmente restringida para transferencias.` 
-          : `Su cuenta ${targetUser.accountNumber} se encuentra plenamente operativa.`,
-        bodyHtml: `<div style="font-family:sans-serif;color:#1e293b;padding:24px;border-radius:12px;background:#f8fafc;border:1px solid #e2e8f0;">
-          <h2 style="color:${isBlocked ? '#dc2626' : '#059669'};margin-bottom:8px;">${isBlocked ? 'Estado de Cuenta: Bloqueada' : 'Estado de Cuenta: Activa y Desbloqueada'}</h2>
-          <p>Estimado(a) <strong>${targetUser.name}</strong>,</p>
-          <p>${isBlocked 
-            ? 'Le comunicamos que por motivos de seguridad y revisión de cumplimiento normativo, su cuenta ha sido congelada. Las transferencias salientes y débitos permanecerán suspendidos.' 
-            : 'Le comunicamos que su cuenta bancaria ha sido desbloqueada satisfactoriamente. Todas las operaciones de depósito, retiro y transferencias se encuentran habilitadas.'}
-          </p>
-          <p style="font-size:12px;color:#94a3b8;margin-top:16px;">Banco Gold Payments | Departamento de Seguridad y Cumplimiento.</p>
-        </div>`,
-        type: isBlocked ? 'account_blocked' : 'account_unblocked',
-      });
+    const targetUser = users.find(u => u.id === userId);
+    if (!targetUser) {
+      return { success: false, newStatus: 'active' as const };
     }
 
-    return { success: true, newStatus };
+    const nextStatus: 'active' | 'blocked' = targetUser.status === 'blocked' ? 'active' : 'blocked';
+    const isBlocked = nextStatus === 'blocked';
+
+    setUsers(prev => prev.map(u => (u.id === userId ? { ...u, status: nextStatus } : u)));
+
+    setNotifications(prev => [
+      {
+        id: 'notif-' + Date.now(),
+        title: isBlocked ? 'Cuenta Bancaria Bloqueada' : 'Cuenta Bancaria Desbloqueada',
+        message: isBlocked 
+          ? `La cuenta de ${targetUser.name} ha sido bloqueada/congelada por el Gestor.` 
+          : `La cuenta de ${targetUser.name} ha sido reactivada exitosamente.`,
+        time: 'Ahora',
+        read: false,
+        type: isBlocked ? 'alert' : 'success',
+      },
+      ...prev
+    ]);
+
+    triggerManualEmailNotification({
+      to: targetUser.email,
+      recipientName: targetUser.name,
+      subject: isBlocked ? 'Aviso Importante: Cuenta Bancaria Suspendida/Bloqueada' : 'Notificación Oficial: Cuenta Bancaria Reactivada',
+      preview: isBlocked 
+        ? `Su cuenta ${targetUser.accountNumber} ha sido temporalmente restringida para transferencias.` 
+        : `Su cuenta ${targetUser.accountNumber} se encuentra plenamente operativa.`,
+      bodyHtml: `<div style="font-family:sans-serif;color:#1e293b;padding:24px;border-radius:12px;background:#f8fafc;border:1px solid #e2e8f0;">
+        <h2 style="color:${isBlocked ? '#dc2626' : '#059669'};margin-bottom:8px;">${isBlocked ? 'Estado de Cuenta: Bloqueada' : 'Estado de Cuenta: Activa y Desbloqueada'}</h2>
+        <p>Estimado(a) <strong>${targetUser.name}</strong>,</p>
+        <p>${isBlocked 
+          ? 'Le comunicamos que por motivos de seguridad y revisión de cumplimiento normativo, su cuenta ha sido congelada. Las transferencias salientes y débitos permanecerán suspendidos.' 
+          : 'Le comunicamos que su cuenta bancaria ha sido desbloqueada satisfactoriamente. Todas las operaciones de depósito, retiro y transferencias se encuentran habilitadas.'}
+        </p>
+        <p style="font-size:12px;color:#94a3b8;margin-top:16px;">Banco Gold Payments | Departamento de Seguridad y Cumplimiento.</p>
+      </div>`,
+      type: isBlocked ? 'account_blocked' : 'account_unblocked',
+    });
+
+    return { success: true, newStatus: nextStatus };
   };
 
   const adminApproveTransfer = (txId: string) => {
-    let approvedTx: TransactionItem | undefined;
-    setTransactions(prev => prev.map(tx => {
-      if (tx.id === txId) {
-        approvedTx = { ...tx, status: 'completed' };
-        return approvedTx;
-      }
-      return tx;
-    }));
-
-    if (!approvedTx) {
+    const existingTx = transactions.find(t => t.id === txId);
+    if (!existingTx) {
       return { success: false, error: 'Transferencia no encontrada' };
     }
+
+    const approvedTx: TransactionItem = { ...existingTx, status: 'completed' };
+    setTransactions(prev => prev.map(tx => (tx.id === txId ? approvedTx : tx)));
 
     setNotifications(prev => [
       {
@@ -1204,18 +1194,13 @@ export function BankingProvider({ children }: { children: React.ReactNode }) {
   };
 
   const adminRejectTransfer = (txId: string, reason: string) => {
-    let rejectedTx: TransactionItem | undefined;
-    setTransactions(prev => prev.map(tx => {
-      if (tx.id === txId) {
-        rejectedTx = { ...tx, status: 'failed' };
-        return rejectedTx;
-      }
-      return tx;
-    }));
-
-    if (!rejectedTx) {
+    const existingTx = transactions.find(t => t.id === txId);
+    if (!existingTx) {
       return { success: false, error: 'Transferencia no encontrada' };
     }
+
+    const rejectedTx: TransactionItem = { ...existingTx, status: 'failed' };
+    setTransactions(prev => prev.map(tx => (tx.id === txId ? rejectedTx : tx)));
 
     // Refund funds back to the user
     const refundAmount = rejectedTx.amount + rejectedTx.fee;

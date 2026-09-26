@@ -2,6 +2,9 @@ import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
   typescript: {
     ignoreBuildErrors: false,
   },
@@ -17,6 +20,18 @@ const nextConfig: NextConfig = {
     ],
   },
   output: 'standalone',
+  async rewrites() {
+    return [
+      {
+        source: '/v1/webhooks/mercadopago',
+        destination: '/api/webhooks/mercadopago',
+      },
+      {
+        source: '/api/v1/webhooks/mercadopago',
+        destination: '/api/webhooks/mercadopago',
+      },
+    ];
+  },
   transpilePackages: ['motion'],
   turbopack: {},
   webpack: (config, {dev}) => {

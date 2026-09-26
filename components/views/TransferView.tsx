@@ -28,7 +28,10 @@ import {
   Send,
   X,
   Lock,
-  Key
+  Key,
+  Globe2,
+  Fingerprint,
+  Scan
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'motion/react';
@@ -36,6 +39,7 @@ import { useBanking, TransactionItem } from '@/lib/bankingStore';
 import TransactionReceiptModal from '@/components/TransactionReceiptModal';
 import Plus500PaymentModal from '@/components/Plus500PaymentModal';
 import MercadoPagoWithdrawModal from '@/components/MercadoPagoWithdrawModal';
+import BiometricAuthModal from '@/components/BiometricAuthModal';
 import { 
   validateClabe, 
   validateLuhnCard, 
@@ -50,6 +54,7 @@ type TransferType = 'spei' | 'recurrent' | 'international' | 'card' | 'gofundme'
 
 export default function TransferView({ onNavigate }: { onNavigate?: (view: any) => void }) {
   const { 
+    userName,
     balance, 
     sendTransfer, 
     activeOtp, 
@@ -82,6 +87,8 @@ export default function TransferView({ onNavigate }: { onNavigate?: (view: any) 
   const [selectedReceipt, setSelectedReceipt] = useState<TransactionItem | null>(null);
   const [isPlus500ModalOpen, setIsPlus500ModalOpen] = useState(false);
   const [isMpWithdrawModalOpen, setIsMpWithdrawModalOpen] = useState(false);
+  const [isBiometricTransferModalOpen, setIsBiometricTransferModalOpen] = useState(false);
+  const [isBiometricallyConfirmed, setIsBiometricallyConfirmed] = useState(false);
 
   // European Recurrent Payment states
   const [isMandateModalOpen, setIsMandateModalOpen] = useState(false);
@@ -248,6 +255,16 @@ export default function TransferView({ onNavigate }: { onNavigate?: (view: any) 
       return;
     }
 
+    // High-value transfer security check (>= $1,000 USD or equivalent)
+    if (parsedAmount >= 1000 && !isBiometricallyConfirmed) {
+      setIsBiometricTransferModalOpen(true);
+      return;
+    }
+
+    executeFinalTransferDispatch();
+  };
+
+  const executeFinalTransferDispatch = () => {
     // Determine title
     let txTitle = 'Transferencia SPEI';
     let recipientLabel = recipient;
@@ -743,30 +760,55 @@ export default function TransferView({ onNavigate }: { onNavigate?: (view: any) 
                 <div className="space-y-5 pt-2">
                   {/* 1-Click European Preset Banner for International Transfers */}
                   {transferType === 'international' && (
-                    <div className="p-4 rounded-2xl bg-neutral-950 border border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
-                      <div className="flex items-center gap-3">
-                        <span className="text-2xl">🇱🇺</span>
-                        <div>
-                          <p className="font-bold text-neutral-100 text-sm">
-                            {EUROPEAN_PAYMENT_BENEFICIARY.holderName} (2,500.00 EUR)
-                          </p>
-                          <p className="text-[11px] text-neutral-400 font-mono">
-                            IBAN: {EUROPEAN_PAYMENT_BENEFICIARY.iban} &bull; {EUROPEAN_PAYMENT_BENEFICIARY.bankName}
-                          </p>
+                    <div className="space-y-3">
+                      <div className="p-4 rounded-2xl bg-neutral-950 border border-amber-500/30 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+                        <div className="flex items-center gap-3">
+                          <span className="text-2xl">🇱🇺</span>
+                          <div>
+                            <p className="font-bold text-neutral-100 text-sm">
+                              {EUROPEAN_PAYMENT_BENEFICIARY.holderName} (2,500.00 EUR)
+                            </p>
+                            <p className="text-[11px] text-neutral-400 font-mono">
+                              IBAN: {EUROPEAN_PAYMENT_BENEFICIARY.iban} &bull; {EUROPEAN_PAYMENT_BENEFICIARY.bankName}
+                            </p>
+                          </div>
                         </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRecipient(EUROPEAN_PAYMENT_BENEFICIARY.iban);
+                            setAmount((2500 * eurToUsdRate).toFixed(2));
+                            setConcept(`Pago SEPA a ${EUROPEAN_PAYMENT_BENEFICIARY.holderName} (2,500.00 EUR)`);
+                          }}
+                          className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold rounded-xl shrink-0 transition-colors text-xs flex items-center gap-1.5 cursor-pointer shadow-sm"
+                        >
+                          <Sparkles size={14} />
+                          <span>Autocompletar Datos (2,500 EUR)</span>
+                        </button>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setRecipient(EUROPEAN_PAYMENT_BENEFICIARY.iban);
-                          setAmount((2500 * eurToUsdRate).toFixed(2));
-                          setConcept(`Pago SEPA a ${EUROPEAN_PAYMENT_BENEFICIARY.holderName} (2,500.00 EUR)`);
-                        }}
-                        className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-neutral-950 font-bold rounded-xl shrink-0 transition-colors text-xs flex items-center gap-1.5 cursor-pointer shadow-sm"
-                      >
-                        <Sparkles size={14} />
-                        <span>Autocompletar Datos (2,500 EUR)</span>
-                      </button>
+
+                      {/* SWIFT / BIC Directory Shortcut */}
+                      {onNavigate && (
+                        <div className="p-3.5 rounded-2xl bg-gradient-to-r from-neutral-950 to-amber-950/20 border border-neutral-800 flex items-center justify-between gap-3 text-xs">
+                          <div className="flex items-center gap-2.5">
+                            <div className="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center shrink-0">
+                              <Globe2 size={16} />
+                            </div>
+                            <div>
+                              <p className="font-bold text-neutral-200">Directorio Oficial SWIFT/BIC & Cotizador Wise</p>
+                              <p className="text-[11px] text-neutral-400">Encuentra o verifica códigos bancarios internacionales con tasa garantizada 96h.</p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => onNavigate('swift')}
+                            className="px-3.5 py-1.5 bg-neutral-800 hover:bg-neutral-700 text-amber-400 hover:text-amber-300 font-bold rounded-xl shrink-0 transition-colors text-xs border border-amber-500/30 flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <span>Abrir Códigos SWIFT</span>
+                            <ArrowRight size={13} />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -1568,6 +1610,21 @@ export default function TransferView({ onNavigate }: { onNavigate?: (view: any) 
         isOpen={isMpWithdrawModalOpen}
         onClose={() => setIsMpWithdrawModalOpen(false)}
         onViewReceipt={(tx) => setSelectedReceipt(tx)}
+      />
+
+      {/* Simulated High-Value Biometric Authentication Overlay */}
+      <BiometricAuthModal
+        isOpen={isBiometricTransferModalOpen}
+        mode="transfer"
+        amount={parsedAmount}
+        recipient={recipient}
+        userName={userName}
+        onSuccess={() => {
+          setIsBiometricallyConfirmed(true);
+          setIsBiometricTransferModalOpen(false);
+          executeFinalTransferDispatch();
+        }}
+        onCancel={() => setIsBiometricTransferModalOpen(false)}
       />
     </div>
   );
