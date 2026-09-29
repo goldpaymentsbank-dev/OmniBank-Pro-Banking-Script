@@ -97,7 +97,9 @@ export default function EmailNotificationModal({
           <div className="px-6 py-4 bg-slate-950/60 border-b border-slate-800 text-xs space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-slate-400">De:</span>
-              <span className="text-slate-200 font-mono">notificaciones@bancogoldpayments.com</span>
+              <span className="text-slate-200 font-mono">
+                {email.senderName ? `${email.senderName} <${email.from || 'notificaciones@goldpaymentsbank.com'}>` : (email.from || 'notificaciones@goldpaymentsbank.com')}
+              </span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-slate-400">Para:</span>

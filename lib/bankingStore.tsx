@@ -1,6 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { pushService } from './pushNotificationService';
 import { 
   generateValidLuhnCard, 
   generateValidClabe, 
@@ -137,6 +138,49 @@ export interface LoanItem {
   appliedDate: string;
 }
 
+export interface ExternalCardItem {
+  id: string;
+  brand: 'VISA' | 'MASTERCARD' | 'AMEX';
+  cardNumber: string;
+  last4: string;
+  holderName: string;
+  expMonth: string;
+  expYear: string;
+  bankOrigin: string;
+  postalCode: string;
+  isDefault: boolean;
+  colorTheme?: string;
+  createdAt: string;
+}
+
+export interface LinkedAccountItem {
+  id: string;
+  bankName: string;
+  accountType: 'Ahorros' | 'Corriente' | 'Nómina' | 'Inversión';
+  accountNumberMasked: string;
+  currency: 'USD' | 'MXN' | 'EUR';
+  estimatedBalance: number;
+  status: 'connected' | 'syncing';
+  lastSynced: string;
+}
+
+export interface DetailedUserRegistrationInput {
+  name: string;
+  email: string;
+  phone: string;
+  birthDate?: string;
+  address?: string;
+  postalCode: string;
+  nationality?: string;
+  accountType?: 'ahorros' | 'corriente' | 'inversion';
+  currency?: 'USD' | 'MXN' | 'EUR';
+  avatarUrl?: string;
+  initialDeposit?: number;
+  tier?: 'Personal' | 'Premier' | 'Empresarial';
+  password?: string;
+  pin?: string;
+}
+
 export interface UserAccountItem {
   id: string;
   name: string;
@@ -150,6 +194,17 @@ export interface UserAccountItem {
   tier: 'Personal' | 'Premier' | 'Empresarial';
   createdAt: string;
   totalTransfers: number;
+  postalCode: string;
+  birthDate?: string;
+  address?: string;
+  nationality?: string;
+  accountType?: 'ahorros' | 'corriente' | 'inversion';
+  currency?: 'USD' | 'MXN' | 'EUR';
+  avatarUrl?: string;
+  password?: string;
+  pin?: string;
+  externalCards?: ExternalCardItem[];
+  linkedAccounts?: LinkedAccountItem[];
 }
 
 export interface TransferSecurityConfig {
@@ -163,9 +218,23 @@ export interface TransferSecurityConfig {
   minAmountForApproval: number;
 }
 
+export interface CustomBankEmailConfig {
+  senderEmail: string;
+  senderName: string;
+  supportEmail: string;
+  replyToEmail: string;
+  smtpHost: string;
+  smtpPort: number;
+  smtpUser: string;
+  smtpSecure: boolean;
+  institutionName: string;
+}
+
 export interface EmailNotificationLog {
   id: string;
   to: string;
+  from?: string;
+  senderName?: string;
   recipientName: string;
   subject: string;
   preview: string;
@@ -185,19 +254,35 @@ interface BankingContextType {
   userName: string;
   userEmail: string;
   userPhone: string;
+  userPostalCode: string;
   isAccountBlocked: boolean;
   users: UserAccountItem[];
   activeUserId: string;
   securityConfig: TransferSecurityConfig;
   emailLogs: EmailNotificationLog[];
+  customBankEmail: CustomBankEmailConfig;
+  updateCustomBankEmail: (config: Partial<CustomBankEmailConfig>) => void;
+  sendTestBankEmail: (toEmail: string) => { success: boolean; log: EmailNotificationLog };
+  lastReceivedEmail: EmailNotificationLog | null;
+  clearLastReceivedEmail: () => void;
   adminCreditAccount: (userId: string, amount: number, concept: string) => { success: boolean; tx?: TransactionItem; error?: string };
   adminDebitAccount: (userId: string, amount: number, concept: string) => { success: boolean; tx?: TransactionItem; error?: string };
   adminToggleAccountBlock: (userId: string) => { success: boolean; newStatus: 'active' | 'blocked' };
   adminApproveTransfer: (txId: string) => { success: boolean; tx?: TransactionItem; error?: string };
   adminRejectTransfer: (txId: string, reason: string) => { success: boolean; tx?: TransactionItem; error?: string };
+  adminEditUser: (userId: string, data: Partial<UserAccountItem>) => { success: boolean; error?: string };
+  adminDeleteUser: (userId: string) => { success: boolean; error?: string };
+  updateUserPhone: (userId: string, newPhone: string) => { success: boolean };
+  updateUserPostalCode: (userId: string, newPostalCode: string) => { success: boolean };
+  addExternalCard: (card: Omit<ExternalCardItem, 'id' | 'createdAt'>) => ExternalCardItem;
+  removeExternalCard: (cardId: string) => boolean;
+  addLinkedAccount: (acc: Omit<LinkedAccountItem, 'id' | 'lastSynced'>) => LinkedAccountItem;
+  removeLinkedAccount: (accId: string) => boolean;
   updateSecurityConfig: (config: Partial<TransferSecurityConfig>) => void;
-  registerNewUser: (data: { name: string; email: string; phone?: string; initialDeposit?: number; tier?: 'Personal' | 'Premier' | 'Empresarial' }) => UserAccountItem;
+  registerNewUser: (data: { name: string; email: string; phone?: string; postalCode?: string; initialDeposit?: number; tier?: 'Personal' | 'Premier' | 'Empresarial' }) => UserAccountItem;
+  registerDetailedUser: (data: DetailedUserRegistrationInput) => UserAccountItem;
   switchUser: (userId: string) => void;
+  sendPushAlert: (title: string, body: string) => Promise<boolean>;
   triggerManualEmailNotification: (log: Omit<EmailNotificationLog, 'id' | 'sentAt' | 'status'>) => void;
   cryptoBtc: number;
   cryptoEth: number;
@@ -423,7 +508,7 @@ export const INITIAL_USERS: UserAccountItem[] = [
     id: 'usr-01',
     name: 'Carlos Mendoza',
     email: 'goldpaymentsbank@gmail.com',
-    phone: '+52 221 227 5075',
+    phone: '+52 55 8492 7104',
     accountNumber: 'GP-8492-9102',
     clabe: INITIAL_CLABE,
     balance: 21540.50,
@@ -432,6 +517,51 @@ export const INITIAL_USERS: UserAccountItem[] = [
     tier: 'Premier',
     createdAt: '10 Ene, 2026',
     totalTransfers: 14,
+    postalCode: '06600',
+    birthDate: '1985-06-18',
+    address: 'Paseo de la Reforma 222, Piso 18, Cuauhtémoc, CDMX',
+    nationality: 'Mexicana',
+    accountType: 'corriente',
+    currency: 'USD',
+    pin: '1084',
+    externalCards: [
+      {
+        id: 'ext-card-01',
+        brand: 'VISA',
+        cardNumber: '4152 8901 2341 4129',
+        last4: '4129',
+        holderName: 'CARLOS MENDOZA',
+        expMonth: '09',
+        expYear: '28',
+        bankOrigin: 'BBVA Bancomer',
+        postalCode: '06600',
+        isDefault: true,
+        colorTheme: 'from-blue-600 to-indigo-800',
+        createdAt: '12 Ene, 2026',
+      }
+    ],
+    linkedAccounts: [
+      {
+        id: 'link-01',
+        bankName: 'BBVA México',
+        accountType: 'Nómina',
+        accountNumberMasked: '•••• 8912',
+        currency: 'MXN',
+        estimatedBalance: 45200.00,
+        status: 'connected',
+        lastSynced: 'Hoy, 09:15',
+      },
+      {
+        id: 'link-02',
+        bankName: 'Santander Premier',
+        accountType: 'Ahorros',
+        accountNumberMasked: '•••• 3301',
+        currency: 'USD',
+        estimatedBalance: 12500.00,
+        status: 'connected',
+        lastSynced: 'Ayer, 18:40',
+      }
+    ]
   },
   {
     id: 'usr-02',
@@ -446,6 +576,14 @@ export const INITIAL_USERS: UserAccountItem[] = [
     tier: 'Empresarial',
     createdAt: '22 Feb, 2026',
     totalTransfers: 28,
+    postalCode: '11560',
+    birthDate: '1982-11-04',
+    address: 'Campos Elíseos 345, Polanco, CDMX',
+    nationality: 'Mexicana',
+    accountType: 'corriente',
+    currency: 'USD',
+    externalCards: [],
+    linkedAccounts: [],
   },
   {
     id: 'usr-03',
@@ -460,6 +598,14 @@ export const INITIAL_USERS: UserAccountItem[] = [
     tier: 'Personal',
     createdAt: '05 Mar, 2026',
     totalTransfers: 6,
+    postalCode: '44100',
+    birthDate: '1990-03-22',
+    address: 'Av. Vallarta 1400, Americana, Guadalajara, JAL',
+    nationality: 'Mexicana',
+    accountType: 'ahorros',
+    currency: 'MXN',
+    externalCards: [],
+    linkedAccounts: [],
   },
   {
     id: 'usr-04',
@@ -474,6 +620,14 @@ export const INITIAL_USERS: UserAccountItem[] = [
     tier: 'Empresarial',
     createdAt: '18 Abr, 2026',
     totalTransfers: 62,
+    postalCode: '66220',
+    birthDate: '2015-08-10',
+    address: 'Calzada San Pedro 250, San Pedro Garza García, NL',
+    nationality: 'Mexicana',
+    accountType: 'corriente',
+    currency: 'USD',
+    externalCards: [],
+    linkedAccounts: [],
   },
 ];
 
@@ -486,6 +640,18 @@ export const DEFAULT_SECURITY_CONFIG: TransferSecurityConfig = {
   swiftCode: 'SWIFT-GP88',
   requireAdminApproval: true,
   minAmountForApproval: 5000,
+};
+
+export const DEFAULT_BANK_EMAIL_CONFIG: CustomBankEmailConfig = {
+  senderEmail: 'GPB@goldpaymentsbank.com',
+  senderName: 'Gold Payments Bank (GPB) - Sistema Oficial',
+  supportEmail: 'soporte@goldpaymentsbank.com',
+  replyToEmail: 'GPB@goldpaymentsbank.com',
+  smtpHost: 'smtp.goldpaymentsbank.com',
+  smtpPort: 587,
+  smtpUser: 'GPB@goldpaymentsbank.com',
+  smtpSecure: true,
+  institutionName: 'Banco Gold Payments S.A. Institución de Banca Múltiple',
 };
 
 export const INITIAL_EMAIL_LOGS: EmailNotificationLog[] = [
@@ -545,7 +711,8 @@ export function BankingProvider({ children }: { children: React.ReactNode }) {
   const [userAccount] = useState<string>('GP-8492-9102');
   const [userName, setUserName] = useState<string>('Carlos Mendoza');
   const [userEmail, setUserEmail] = useState<string>('goldpaymentsbank@gmail.com');
-  const [userPhone, setUserPhone] = useState<string>('+52 221 227 5075');
+  const [userPhone, setUserPhone] = useState<string>('+52 55 8492 7104');
+  const [userPostalCode, setUserPostalCode] = useState<string>('06600');
   const [cryptoBtc, setCryptoBtc] = useState<number>(0.125);
   const [cryptoEth, setCryptoEth] = useState<number>(1.85);
   const [cryptoUsdt, setCryptoUsdt] = useState<number>(1500.00);
@@ -559,11 +726,65 @@ export function BankingProvider({ children }: { children: React.ReactNode }) {
   });
   const [activeOtp, setActiveOtp] = useState<string>('749215');
 
-  // Gestor / Admin State & Configuration
-  const [users, setUsers] = useState<UserAccountItem[]>(INITIAL_USERS);
+  // Gestor / Admin State & Configuration with persistent storage
+  const [users, setUsers] = useState<UserAccountItem[]>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('gpb_registered_users');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        }
+      } catch {}
+    }
+    return INITIAL_USERS;
+  });
+
   const [activeUserId, setActiveUserId] = useState<string>('usr-01');
   const [securityConfig, setSecurityConfig] = useState<TransferSecurityConfig>(DEFAULT_SECURITY_CONFIG);
   const [emailLogs, setEmailLogs] = useState<EmailNotificationLog[]>(INITIAL_EMAIL_LOGS);
+  const [lastReceivedEmail, setLastReceivedEmail] = useState<EmailNotificationLog | null>(null);
+
+  // Initialize service worker on mount
+  useEffect(() => {
+    pushService.init();
+  }, []);
+
+  // Save users whenever modified
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('gpb_registered_users', JSON.stringify(users));
+      } catch {}
+    }
+  }, [users]);
+
+  // Custom Bank Email (tunombre@tubanco.com)
+  const [customBankEmail, setCustomBankEmail] = useState<CustomBankEmailConfig>(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('gp_custom_bank_email');
+        if (saved) return { ...DEFAULT_BANK_EMAIL_CONFIG, ...JSON.parse(saved) };
+      } catch {}
+    }
+    return DEFAULT_BANK_EMAIL_CONFIG;
+  });
+
+  const updateCustomBankEmail = (config: Partial<CustomBankEmailConfig>) => {
+    setCustomBankEmail(prev => {
+      const updated = { ...prev, ...config };
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem('gp_custom_bank_email', JSON.stringify(updated));
+        } catch {}
+      }
+      return updated;
+    });
+  };
+
+  const clearLastReceivedEmail = () => {
+    setLastReceivedEmail(null);
+  };
 
   const currentUser = users.find(u => u.id === activeUserId);
   const isAccountBlocked = currentUser?.status === 'blocked';
@@ -774,11 +995,49 @@ export function BankingProvider({ children }: { children: React.ReactNode }) {
     const timeStr = 'Hoy, ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     const newLog: EmailNotificationLog = {
       ...data,
+      from: data.from || customBankEmail.senderEmail,
+      senderName: data.senderName || customBankEmail.senderName,
       id: 'email-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
       sentAt: timeStr,
       status: 'delivered',
     };
     setEmailLogs(prev => [newLog, ...prev]);
+    setLastReceivedEmail(newLog);
+  };
+
+  const sendTestBankEmail = (toEmail: string) => {
+    const now = new Date();
+    const timeStr = 'Hoy, ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const targetEmail = toEmail || userEmail;
+    const testLog: EmailNotificationLog = {
+      id: 'email-test-' + Date.now(),
+      to: targetEmail,
+      from: customBankEmail.senderEmail,
+      senderName: customBankEmail.senderName,
+      recipientName: userName,
+      subject: `Prueba Oficial de Servidor Bancario (${customBankEmail.senderEmail})`,
+      preview: `Mensaje de prueba generado desde el servidor SMTP ${customBankEmail.smtpHost}:${customBankEmail.smtpPort}.`,
+      bodyHtml: `<div style="font-family:sans-serif;color:#1e293b;padding:24px;border-radius:12px;background:#f8fafc;border:1px solid #e2e8f0;">
+        <h2 style="color:#0284c7;margin-bottom:8px;">Verificación de Correo Institucional Exitosa</h2>
+        <p>Estimado(a) <strong>${userName}</strong>,</p>
+        <p>Este correo confirma que el servidor de correo institucional de <strong>${customBankEmail.senderName}</strong> está debidamente configurado y validado.</p>
+        <table style="width:100%;margin:16px 0;border-collapse:collapse;font-size:14px;">
+          <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;">Dominio / Remitente:</td><td style="padding:8px 0;text-align:right;font-weight:bold;color:#0284c7;">${customBankEmail.senderEmail}</td></tr>
+          <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;">Host SMTP:</td><td style="padding:8px 0;text-align:right;font-family:monospace;">${customBankEmail.smtpHost}:${customBankEmail.smtpPort}</td></tr>
+          <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;">Cifrado Seguro:</td><td style="padding:8px 0;text-align:right;">${customBankEmail.smtpSecure ? 'TLS / SSL Activo' : 'Desactivado'}</td></tr>
+          <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;">Correo de Soporte:</td><td style="padding:8px 0;text-align:right;">${customBankEmail.supportEmail}</td></tr>
+          <tr><td style="padding:8px 0;color:#64748b;">Entidad Emisora:</td><td style="padding:8px 0;text-align:right;font-weight:bold;">${customBankEmail.institutionName}</td></tr>
+        </table>
+        <p style="font-size:12px;color:#94a3b8;margin-top:16px;">Banco Gold Payments | Notificaciones y Alertas Automáticas en Tiempo Real.</p>
+      </div>`,
+      sentAt: timeStr,
+      type: 'security',
+      status: 'delivered',
+    };
+
+    setEmailLogs(prev => [testLog, ...prev]);
+    setLastReceivedEmail(testLog);
+    return { success: true, log: testLog };
   };
 
   // Process a transfer with real balance deduction, COT/IMF rules, approval gate and auto email
@@ -1263,10 +1522,183 @@ export function BankingProvider({ children }: { children: React.ReactNode }) {
     ]);
   };
 
+  const adminEditUser = (userId: string, data: Partial<UserAccountItem>) => {
+    let found = false;
+    setUsers(prev => prev.map(u => {
+      if (u.id === userId) {
+        found = true;
+        return { ...u, ...data };
+      }
+      return u;
+    }));
+
+    if (userId === activeUserId) {
+      if (data.name) setUserName(data.name);
+      if (data.email) setUserEmail(data.email);
+      if (data.phone) setUserPhone(data.phone);
+      if (data.postalCode) setUserPostalCode(data.postalCode);
+      if (data.balance !== undefined) setBalance(data.balance);
+    }
+
+    return { success: found };
+  };
+
+  const updateUserPhone = (userId: string, newPhone: string) => {
+    const res = adminEditUser(userId, { phone: newPhone });
+    if (res.success) {
+      setNotifications(prev => [
+        {
+          id: 'notif-ph-' + Date.now(),
+          title: 'Teléfono Actualizado',
+          message: `El número de contacto se actualizó a ${newPhone}.`,
+          time: 'Ahora',
+          read: false,
+          type: 'success',
+        },
+        ...prev
+      ]);
+    }
+    return res;
+  };
+
+  const updateUserPostalCode = (userId: string, newPostalCode: string) => {
+    const res = adminEditUser(userId, { postalCode: newPostalCode });
+    if (res.success) {
+      setNotifications(prev => [
+        {
+          id: 'notif-pc-' + Date.now(),
+          title: 'Código Postal Actualizado (AVS)',
+          message: `Código postal validado para pagos en línea: ${newPostalCode}.`,
+          time: 'Ahora',
+          read: false,
+          type: 'success',
+        },
+        ...prev
+      ]);
+    }
+    return res;
+  };
+
+  const addExternalCard = (card: Omit<ExternalCardItem, 'id' | 'createdAt'>): ExternalCardItem => {
+    const newCard: ExternalCardItem = {
+      ...card,
+      id: 'ext-' + Date.now(),
+      createdAt: 'Hoy',
+    };
+
+    setUsers(prev => prev.map(u => {
+      if (u.id === activeUserId) {
+        const existing = u.externalCards || [];
+        return {
+          ...u,
+          externalCards: [newCard, ...existing]
+        };
+      }
+      return u;
+    }));
+
+    setNotifications(prev => [
+      {
+        id: 'notif-ec-' + Date.now(),
+        title: 'Tarjeta Externa Vinculada',
+        message: `Tarjeta ${card.brand} terminación ${card.last4} agregada exitosamente para consolidación y pagos.`,
+        time: 'Ahora',
+        read: false,
+        type: 'success',
+      },
+      ...prev
+    ]);
+
+    pushService.sendNotification({
+      title: 'Tarjeta Externa Vinculada',
+      body: `${card.brand} terminación •••• ${card.last4} de ${card.bankOrigin} ha sido verificada con CP ${card.postalCode}.`,
+    });
+
+    return newCard;
+  };
+
+  const removeExternalCard = (cardId: string) => {
+    setUsers(prev => prev.map(u => {
+      if (u.id === activeUserId) {
+        return {
+          ...u,
+          externalCards: (u.externalCards || []).filter(c => c.id !== cardId)
+        };
+      }
+      return u;
+    }));
+    return true;
+  };
+
+  const addLinkedAccount = (acc: Omit<LinkedAccountItem, 'id' | 'lastSynced'>): LinkedAccountItem => {
+    const nowStr = 'Hoy, ' + new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const newAcc: LinkedAccountItem = {
+      ...acc,
+      id: 'link-' + Date.now(),
+      lastSynced: nowStr,
+    };
+
+    setUsers(prev => prev.map(u => {
+      if (u.id === activeUserId) {
+        const existing = u.linkedAccounts || [];
+        return {
+          ...u,
+          linkedAccounts: [newAcc, ...existing]
+        };
+      }
+      return u;
+    }));
+
+    setNotifications(prev => [
+      {
+        id: 'notif-la-' + Date.now(),
+        title: 'Cuenta Bancaria Consolidada',
+        message: `Se sincronizó la cuenta de ${acc.bankName} (${acc.accountNumberMasked}).`,
+        time: 'Ahora',
+        read: false,
+        type: 'success',
+      },
+      ...prev
+    ]);
+
+    return newAcc;
+  };
+
+  const removeLinkedAccount = (accId: string) => {
+    setUsers(prev => prev.map(u => {
+      if (u.id === activeUserId) {
+        return {
+          ...u,
+          linkedAccounts: (u.linkedAccounts || []).filter(a => a.id !== accId)
+        };
+      }
+      return u;
+    }));
+    return true;
+  };
+
+  const adminDeleteUser = (userId: string) => {
+    if (users.length <= 1) {
+      return { success: false, error: 'No se puede eliminar la única cuenta del banco.' };
+    }
+
+    setUsers(prev => prev.filter(u => u.id !== userId));
+
+    if (activeUserId === userId) {
+      const remaining = users.filter(u => u.id !== userId);
+      if (remaining.length > 0) {
+        switchUser(remaining[0].id);
+      }
+    }
+
+    return { success: true };
+  };
+
   const registerNewUser = (data: {
     name: string;
     email: string;
     phone?: string;
+    postalCode?: string;
     initialDeposit?: number;
     tier?: 'Personal' | 'Premier' | 'Empresarial';
   }) => {
@@ -1279,6 +1711,7 @@ export function BankingProvider({ children }: { children: React.ReactNode }) {
       name: data.name,
       email: data.email,
       phone: data.phone || '+52 55 ' + Math.floor(10000000 + Math.random() * 90000000),
+      postalCode: data.postalCode || '06600',
       accountNumber: newAccNum,
       clabe: newClabe,
       balance: deposit,
@@ -1287,6 +1720,10 @@ export function BankingProvider({ children }: { children: React.ReactNode }) {
       tier: data.tier || 'Personal',
       createdAt: 'Hoy',
       totalTransfers: deposit > 0 ? 1 : 0,
+      accountType: 'corriente',
+      currency: 'USD',
+      externalCards: [],
+      linkedAccounts: [],
     };
 
     setUsers(prev => [newUser, ...prev]);
@@ -1303,6 +1740,11 @@ export function BankingProvider({ children }: { children: React.ReactNode }) {
       ...prev
     ]);
 
+    pushService.sendNotification({
+      title: 'Apertura de Cuenta Confirmada',
+      body: `Bienvenido a Gold Payments Bank, ${data.name}. Cuenta ${newAccNum} activa.`,
+    });
+
     triggerManualEmailNotification({
       to: data.email,
       recipientName: data.name,
@@ -1311,10 +1753,11 @@ export function BankingProvider({ children }: { children: React.ReactNode }) {
       bodyHtml: `<div style="font-family:sans-serif;color:#1e293b;padding:24px;border-radius:12px;background:#f8fafc;border:1px solid #e2e8f0;">
         <h2 style="color:#0284c7;margin-bottom:8px;">Bienvenido a Banco Gold Payments</h2>
         <p>Estimado(a) <strong>${data.name}</strong>,</p>
-        <p>Su registro ha sido completado y su cuenta de banca en línea está activa.</p>
+        <p>Su registro ha sido completado y su cuenta de banca en línea está activa con validación postal en tiempo real.</p>
         <table style="width:100%;margin:16px 0;border-collapse:collapse;font-size:14px;">
           <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;">Número de Cuenta:</td><td style="padding:8px 0;text-align:right;font-weight:bold;">${newAccNum}</td></tr>
           <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;">CLABE Interbancaria:</td><td style="padding:8px 0;text-align:right;font-family:monospace;">${newClabe}</td></tr>
+          <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;">Código Postal (AVS):</td><td style="padding:8px 0;text-align:right;font-mono;">${newUser.postalCode}</td></tr>
           <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;">Saldo Inicial:</td><td style="padding:8px 0;text-align:right;font-weight:bold;color:#059669;">$${deposit.toFixed(2)} USD</td></tr>
         </table>
         <p style="font-size:12px;color:#94a3b8;margin-top:16px;">Banco Gold Payments | Plataforma Integral de Servicios Financieros.</p>
@@ -1326,6 +1769,90 @@ export function BankingProvider({ children }: { children: React.ReactNode }) {
     return newUser;
   };
 
+  const registerDetailedUser = (data: DetailedUserRegistrationInput): UserAccountItem => {
+    const newClabe = generateValidClabe();
+    const newAccNum = 'GP-' + Math.floor(1000 + Math.random() * 9000) + '-' + Math.floor(1000 + Math.random() * 9000);
+    const deposit = data.initialDeposit || 0;
+
+    const newUser: UserAccountItem = {
+      id: 'usr-' + Date.now(),
+      name: data.name,
+      email: data.email,
+      phone: data.phone,
+      birthDate: data.birthDate,
+      address: data.address,
+      postalCode: data.postalCode || '06600',
+      nationality: data.nationality || 'Mexicana',
+      accountType: data.accountType || 'corriente',
+      currency: data.currency || 'USD',
+      avatarUrl: data.avatarUrl,
+      password: data.password,
+      pin: data.pin || '1234',
+      accountNumber: newAccNum,
+      clabe: newClabe,
+      balance: deposit,
+      status: 'active',
+      role: 'user',
+      tier: data.tier || 'Personal',
+      createdAt: 'Hoy',
+      totalTransfers: deposit > 0 ? 1 : 0,
+      externalCards: [],
+      linkedAccounts: [],
+    };
+
+    setUsers(prev => [newUser, ...prev]);
+
+    setNotifications(prev => [
+      {
+        id: 'notif-' + Date.now(),
+        title: 'Alta de Usuario por Gestor',
+        message: `El usuario ${data.name} ha sido dado de alta exitosamente (${newAccNum}).`,
+        time: 'Ahora',
+        read: false,
+        type: 'success',
+      },
+      ...prev
+    ]);
+
+    pushService.sendNotification({
+      title: 'Nuevo Usuario Registrado en GPB',
+      body: `El Gestor ha registrado la cuenta de ${data.name} (${newAccNum}). Saldo: $${deposit.toFixed(2)} ${data.currency || 'USD'}.`,
+    });
+
+    triggerManualEmailNotification({
+      to: data.email,
+      recipientName: data.name,
+      subject: `Notificación Oficial: Cuenta Bancaria Creada por el Administrador`,
+      preview: `Su cuenta ${newAccNum} en Banco Gold Payments ha sido creada y validada.`,
+      bodyHtml: `<div style="font-family:sans-serif;color:#1e293b;padding:24px;border-radius:12px;background:#f8fafc;border:1px solid #e2e8f0;">
+        <h2 style="color:#059669;margin-bottom:8px;">Alta Oficial en Banco Gold Payments</h2>
+        <p>Estimado(a) <strong>${data.name}</strong>,</p>
+        <p>El administrador central ha procedido con la apertura y emisión oficial de su cuenta bancaria.</p>
+        <table style="width:100%;margin:16px 0;border-collapse:collapse;font-size:14px;">
+          <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;">Número de Cuenta:</td><td style="padding:8px 0;text-align:right;font-weight:bold;">${newAccNum}</td></tr>
+          <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;">CLABE Banxico:</td><td style="padding:8px 0;text-align:right;font-family:monospace;">${newClabe}</td></tr>
+          <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;">Tipo de Cuenta:</td><td style="padding:8px 0;text-align:right;text-transform:capitalize;">${data.accountType || 'Corriente'}</td></tr>
+          <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;">Código Postal (AVS):</td><td style="padding:8px 0;text-align:right;">${data.postalCode}</td></tr>
+          <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;">Teléfono de Contacto:</td><td style="padding:8px 0;text-align:right;">${data.phone}</td></tr>
+          <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;">Saldo Disponible:</td><td style="padding:8px 0;text-align:right;font-weight:bold;color:#059669;">$${deposit.toFixed(2)} ${data.currency || 'USD'}</td></tr>
+        </table>
+        <p style="font-size:12px;color:#94a3b8;margin-top:16px;">Banco Gold Payments | Sistema Financiero Central Regulado.</p>
+      </div>`,
+      type: 'deposit',
+      amount: deposit,
+    });
+
+    return newUser;
+  };
+
+  const sendPushAlert = async (title: string, body: string) => {
+    return await pushService.sendNotification({
+      title,
+      body,
+      tag: 'gpb-alert-' + Date.now(),
+    });
+  };
+
   const switchUser = (userId: string) => {
     const target = users.find(u => u.id === userId);
     if (!target) return;
@@ -1334,6 +1861,7 @@ export function BankingProvider({ children }: { children: React.ReactNode }) {
     setUserName(target.name);
     setUserEmail(target.email);
     setUserPhone(target.phone);
+    setUserPostalCode(target.postalCode || '06600');
     setUserClabe(target.clabe);
     setNotifications(prev => [
       {
@@ -2033,6 +2561,7 @@ export function BankingProvider({ children }: { children: React.ReactNode }) {
         userName,
         userEmail,
         userPhone,
+        userPostalCode,
         cryptoBtc,
         cryptoEth,
         cryptoUsdt,
@@ -2078,14 +2607,29 @@ export function BankingProvider({ children }: { children: React.ReactNode }) {
         activeUserId,
         securityConfig,
         emailLogs,
+        customBankEmail,
+        updateCustomBankEmail,
+        sendTestBankEmail,
+        lastReceivedEmail,
+        clearLastReceivedEmail,
         adminCreditAccount,
         adminDebitAccount,
         adminToggleAccountBlock,
         adminApproveTransfer,
         adminRejectTransfer,
+        adminEditUser,
+        adminDeleteUser,
+        updateUserPhone,
+        updateUserPostalCode,
+        addExternalCard,
+        removeExternalCard,
+        addLinkedAccount,
+        removeLinkedAccount,
         updateSecurityConfig,
         registerNewUser,
+        registerDetailedUser,
         switchUser,
+        sendPushAlert,
         triggerManualEmailNotification,
       }}
     >

@@ -2,11 +2,11 @@ import type {Metadata} from 'next';
 import './globals.css'; // Global styles
 
 export const metadata: Metadata = {
-  title: 'Gold Payments Bank',
-  description: 'Modern online banking platform featuring fiat and crypto management, Mexican CLABE SPEI transfers, merchant MIDs in production mode, Luhn verified cards, and detailed printable transaction receipts.',
+  title: 'Gold Payments Bank | Plataforma Bancaria en Modo Producción',
+  description: 'Plataforma bancaria en línea moderna en Modo Producción con gestión fiat y cripto, transferencias SPEI Banxico (CLABE), directorio SWIFT/BIC ISO 9362 con cotizador Wise garantizado 96h, autenticación biométrica FIDO2 (FaceID/Huella), integración de Mercado Pago producción y comprobantes PDF descargables.',
   openGraph: {
-    title: 'Gold Payments Bank',
-    description: 'Modern online banking platform featuring fiat and crypto management, Mexican CLABE SPEI transfers, merchant MIDs in production mode, Luhn verified cards, and detailed printable transaction receipts.',
+    title: 'Gold Payments Bank | Plataforma Bancaria en Modo Producción',
+    description: 'Plataforma bancaria en línea moderna en Modo Producción con gestión fiat y cripto, transferencias SPEI Banxico (CLABE), directorio SWIFT/BIC ISO 9362 con cotizador Wise garantizado 96h, autenticación biométrica FIDO2 (FaceID/Huella), integración de Mercado Pago producción y comprobantes PDF descargables.',
   },
 };
 

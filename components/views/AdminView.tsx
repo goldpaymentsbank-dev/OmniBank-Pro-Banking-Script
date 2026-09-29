@@ -27,11 +27,21 @@ import {
   Sliders,
   Check,
   Send,
-  Download
+  Download,
+  Bell,
+  CreditCard,
+  Layers,
+  Phone,
+  MapPin,
+  Edit2
 } from 'lucide-react';
 import { useBanking, UserAccountItem, TransactionItem, EmailNotificationLog } from '@/lib/bankingStore';
 import EmailNotificationModal from '@/components/EmailNotificationModal';
 import MercadoPagoProductionInspector from '@/components/MercadoPagoProductionInspector';
+import CreateUserAdminPanel from '@/components/CreateUserAdminPanel';
+import EditUserModal from '@/components/EditUserModal';
+import AddExternalCardModal from '@/components/AddExternalCardModal';
+import ConsolidateAccountsModal from '@/components/ConsolidateAccountsModal';
 
 export default function AdminView() {
   const {
@@ -40,17 +50,23 @@ export default function AdminView() {
     transactions,
     securityConfig,
     emailLogs,
+    customBankEmail,
+    updateCustomBankEmail,
+    sendTestBankEmail,
     adminCreditAccount,
     adminDebitAccount,
     adminToggleAccountBlock,
     adminApproveTransfer,
     adminRejectTransfer,
+    adminEditUser,
+    adminDeleteUser,
     updateSecurityConfig,
     registerNewUser,
     switchUser,
+    sendPushAlert,
   } = useBanking();
 
-  const [activeTab, setActiveTab] = useState<'users' | 'approvals' | 'security' | 'emails' | 'mercadopago'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'create_user' | 'approvals' | 'security' | 'emails' | 'mercadopago'>('users');
   const [searchQuery, setSearchQuery] = useState('');
   const [userFilter, setUserFilter] = useState<'all' | 'active' | 'blocked'>('all');
 
@@ -59,10 +75,24 @@ export default function AdminView() {
   const [isDebitModalOpen, setIsDebitModalOpen] = useState(false);
   const [isRegisterModalOpen, setIsRegisterModalOpen] = useState(false);
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
+  const [isEditUserModalOpen, setIsEditUserModalOpen] = useState(false);
+  const [isAddCardModalOpen, setIsAddCardModalOpen] = useState(false);
+  const [isConsolidateModalOpen, setIsConsolidateModalOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<UserAccountItem | null>(null);
   const [selectedTxToReject, setSelectedTxToReject] = useState<TransactionItem | null>(null);
   const [selectedEmail, setSelectedEmail] = useState<EmailNotificationLog | null>(null);
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
+
+  // Email Config Form State
+  const [bankSenderEmail, setBankSenderEmail] = useState(customBankEmail.senderEmail);
+  const [bankSenderName, setBankSenderName] = useState(customBankEmail.senderName);
+  const [bankSupportEmail, setBankSupportEmail] = useState(customBankEmail.supportEmail);
+  const [bankReplyToEmail, setBankReplyToEmail] = useState(customBankEmail.replyToEmail);
+  const [bankSmtpHost, setBankSmtpHost] = useState(customBankEmail.smtpHost);
+  const [bankSmtpPort, setBankSmtpPort] = useState(customBankEmail.smtpPort.toString());
+  const [bankSmtpUser, setBankSmtpUser] = useState(customBankEmail.smtpUser);
+  const [testEmailTarget, setTestEmailTarget] = useState('goldpaymentsbank@gmail.com');
+  const [emailConfigSaved, setEmailConfigSaved] = useState(false);
 
   // Form States
   const [depositAmount, setDepositAmount] = useState('');
