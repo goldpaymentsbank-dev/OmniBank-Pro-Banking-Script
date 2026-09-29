@@ -18,24 +18,34 @@ export default function EditUserModal({
   onClose,
   onSuccess,
 }: EditUserModalProps) {
+  if (!isOpen || !user) return null;
+
+  return (
+    <EditUserModalContent
+      key={user.id}
+      user={user}
+      onClose={onClose}
+      onSuccess={onSuccess}
+    />
+  );
+}
+
+function EditUserModalContent({
+  user,
+  onClose,
+  onSuccess,
+}: {
+  user: UserAccountItem;
+  onClose: () => void;
+  onSuccess?: () => void;
+}) {
   const { adminEditUser } = useBanking();
 
-  const [phone, setPhone] = useState('');
-  const [postalCode, setPostalCode] = useState('');
-  const [address, setAddress] = useState('');
-  const [tier, setTier] = useState<'Personal' | 'Premier' | 'Empresarial'>('Personal');
+  const [phone, setPhone] = useState(user.phone || '');
+  const [postalCode, setPostalCode] = useState(user.postalCode || '06600');
+  const [address, setAddress] = useState(user.address || '');
+  const [tier, setTier] = useState<'Personal' | 'Premier' | 'Empresarial'>(user.tier || 'Personal');
   const [savedSuccess, setSavedSuccess] = useState(false);
-
-  useEffect(() => {
-    if (user) {
-      setPhone(user.phone || '');
-      setPostalCode(user.postalCode || '06600');
-      setAddress(user.address || '');
-      setTier(user.tier || 'Personal');
-    }
-  }, [user]);
-
-  if (!isOpen || !user) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
