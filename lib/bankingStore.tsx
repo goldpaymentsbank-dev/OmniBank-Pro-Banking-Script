@@ -1140,6 +1140,35 @@ export function BankingProvider({ children }: { children: React.ReactNode }) {
       trackingKey,
     });
 
+    // Browser Push Notification (via Service Worker)
+    pushService.sendLocalNotification({
+      title: requiresApproval ? '⏳ Transferencia en Proceso SPEI' : '💸 Transferencia SPEI Exitosa',
+      body: `-$${details.amount.toFixed(2)} USD a ${details.recipient}. Folio: ${trackingKey}`,
+      tag: `tx-${trackingKey}`,
+      data: { url: '/', trackingKey },
+    }).catch(() => {});
+
+    // Sync with production SPEI server API if type is SPEI
+    if (details.type === 'spei') {
+      try {
+        fetch('/api/spei/transfer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            cuentaBeneficiario: details.clabe || '646180123456789012',
+            nombreBeneficiario: details.recipient,
+            monto: details.amount,
+            concepto: details.title,
+            claveRastreo: trackingKey,
+            cuentaOrdenante: users.find(u => u.id === activeUserId)?.clabe,
+            nombreOrdenante: userName,
+          }),
+        }).catch(err => console.warn('SPEI Background Gateway Sync:', err));
+      } catch (err) {
+        console.warn('SPEI dispatch error:', err);
+      }
+    }
+
     return { success: true, trackingKey };
   };
 
@@ -1205,6 +1234,14 @@ export function BankingProvider({ children }: { children: React.ReactNode }) {
       amount,
       trackingKey,
     });
+
+    // Browser Push Notification (via Service Worker)
+    pushService.sendLocalNotification({
+      title: '💰 Depósito Acreditado',
+      body: `+$${amount.toFixed(2)} USD acreditados vía ${method}. Folio: ${trackingKey}`,
+      tag: `dep-${trackingKey}`,
+      data: { url: '/', trackingKey },
+    }).catch(() => {});
   };
 
   const adminCreditAccount = (userId: string, amount: number, concept: string) => {

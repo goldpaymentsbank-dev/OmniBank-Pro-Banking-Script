@@ -33,11 +33,14 @@ import {
   Layers,
   Phone,
   MapPin,
-  Edit2
+  Edit2,
+  Cloud
 } from 'lucide-react';
 import { useBanking, UserAccountItem, TransactionItem, EmailNotificationLog } from '@/lib/bankingStore';
 import EmailNotificationModal from '@/components/EmailNotificationModal';
 import MercadoPagoProductionInspector from '@/components/MercadoPagoProductionInspector';
+import SpeiProductionInspector from '@/components/SpeiProductionInspector';
+import GcpDeploymentInspector from '@/components/GcpDeploymentInspector';
 import CreateUserAdminPanel from '@/components/CreateUserAdminPanel';
 import EditUserModal from '@/components/EditUserModal';
 import AddExternalCardModal from '@/components/AddExternalCardModal';
@@ -66,7 +69,7 @@ export default function AdminView() {
     sendPushAlert,
   } = useBanking();
 
-  const [activeTab, setActiveTab] = useState<'users' | 'create_user' | 'approvals' | 'security' | 'emails' | 'mercadopago'>('users');
+  const [activeTab, setActiveTab] = useState<'users' | 'create_user' | 'approvals' | 'security' | 'emails' | 'mercadopago' | 'spei' | 'deploy'>('users');
   const [searchQuery, setSearchQuery] = useState('');
   const [userFilter, setUserFilter] = useState<'all' | 'active' | 'blocked'>('all');
 
@@ -390,6 +393,30 @@ export default function AdminView() {
         >
           <ShieldCheck className="w-4 h-4 text-amber-400" />
           Mercado Pago (PRODUCCIÓN LIVE)
+        </button>
+
+        <button
+          onClick={() => setActiveTab('spei')}
+          className={`flex items-center gap-2 px-4 py-3 text-xs font-semibold border-b-2 transition-all cursor-pointer shrink-0 ${
+            activeTab === 'spei'
+              ? 'border-emerald-500 text-emerald-400 bg-emerald-500/5'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <Building2 className="w-4 h-4 text-emerald-400" />
+          SPEI Banxico / STP (PRODUCCIÓN LIVE)
+        </button>
+
+        <button
+          onClick={() => setActiveTab('deploy')}
+          className={`flex items-center gap-2 px-4 py-3 text-xs font-semibold border-b-2 transition-all cursor-pointer shrink-0 ${
+            activeTab === 'deploy'
+              ? 'border-sky-500 text-sky-400 bg-sky-500/5'
+              : 'border-transparent text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <Cloud className="w-4 h-4 text-sky-400" />
+          Despliegue GCP (Cloud Run & Build)
         </button>
       </div>
 
@@ -902,6 +929,16 @@ export default function AdminView() {
       {/* TAB 5: MERCADO PAGO PRODUCCIÓN LIVE & WEBHOOKS */}
       {activeTab === 'mercadopago' && (
         <MercadoPagoProductionInspector />
+      )}
+
+      {/* TAB 6: SPEI BANXICO / STP PRODUCCIÓN LIVE */}
+      {activeTab === 'spei' && (
+        <SpeiProductionInspector />
+      )}
+
+      {/* TAB 7: DESPLIEGUE GOOGLE CLOUD RUN & BUILD */}
+      {activeTab === 'deploy' && (
+        <GcpDeploymentInspector />
       )}
 
       {/* MODAL: REALIZAR DEPÓSITO */}

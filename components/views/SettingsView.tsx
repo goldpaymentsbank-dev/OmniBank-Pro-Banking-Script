@@ -22,14 +22,16 @@ import {
   Save,
   Zap,
   Clock,
-  Code2
+  Code2,
+  Download
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useBanking } from '@/lib/bankingStore';
 import { validateClabe, validateAbaRouting, validateAchAccount, MORSE_DEFAULT_BENEFICIARY } from '@/lib/bankingValidation';
 import MercadoPagoWithdrawModal from '@/components/MercadoPagoWithdrawModal';
+import MonthlyStatementGenerator from '@/components/MonthlyStatementGenerator';
 
-type SettingsTab = 'profile' | 'security' | 'clabe' | 'kyc' | 'morse' | 'production';
+type SettingsTab = 'profile' | 'security' | 'clabe' | 'kyc' | 'morse' | 'production' | 'statement';
 
 export default function SettingsView() {
   const { 
@@ -254,6 +256,21 @@ export default function SettingsView() {
             <ShieldCheck size={18} />
             <span>Modo Producción</span>
             <span className="ml-auto text-[10px] bg-emerald-500/20 text-emerald-400 font-mono px-1.5 py-0.5 rounded font-bold">LIVE</span>
+          </button>
+
+          <button 
+            type="button"
+            onClick={() => setActiveTab('statement')}
+            className={cn(
+              "w-full flex items-center gap-3 px-4 py-3 rounded-xl font-medium text-sm transition-colors text-left",
+              activeTab === 'statement'
+                ? "bg-amber-500 text-neutral-950 font-bold shadow-md shadow-amber-500/10"
+                : "text-neutral-400 hover:text-neutral-200 hover:bg-neutral-900"
+            )}
+          >
+            <Download size={18} />
+            <span>Estado de Cuenta</span>
+            <span className="ml-auto text-[10px] bg-sky-500/20 text-sky-400 font-mono px-1.5 py-0.5 rounded font-bold">PDF</span>
           </button>
         </div>
 
@@ -900,6 +917,11 @@ export default function SettingsView() {
                 </div>
               </form>
             </div>
+          )}
+
+          {/* TAB 7: Monthly Statement PDF */}
+          {activeTab === 'statement' && (
+            <MonthlyStatementGenerator />
           )}
         </div>
       </div>

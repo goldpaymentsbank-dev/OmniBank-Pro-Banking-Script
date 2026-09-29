@@ -1,0 +1,47 @@
+# Google Cloud Build configuration for Gold Payments Bank
+# Builds container and deploys to Cloud Run with port 3000
+
+steps:
+  # Step 1: Build Docker container with Cloud Build cache
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/gold-payments-bank:$BUILD_ID'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/gold-payments-bank:latest'
+      - '.'
+
+  # Step 2: Push container image to Google Container Registry / Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'gcr.io/$PROJECT_ID/gold-payments-bank:latest'
+
+  # Step 3: Deploy to Google Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'gold-payments-bank'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/gold-payments-bank:latest'
+      - '--region'
+      - 'us-east1'
+      - '--platform'
+      - 'managed'
+      - '--allow-unauthenticated'
+      - '--port'
+      - '3000'
+      - '--memory'
+      - '1Gi'
+      - '--cpu'
+      - '1'
+
+images:
+  - 'gcr.io/$PROJECT_ID/gold-payments-bank:latest'
+  - 'gcr.io/$PROJECT_ID/gold-payments-bank:$BUILD_ID'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
