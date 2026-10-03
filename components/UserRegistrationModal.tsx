@@ -42,6 +42,7 @@ export default function UserRegistrationModal({
   const [tier, setTier] = useState<'Personal' | 'Premier' | 'Empresarial'>('Personal');
   const [initialDeposit, setInitialDeposit] = useState('1000');
   const [autoSwitch, setAutoSwitch] = useState(true);
+  const [createdUserId, setCreatedUserId] = useState<string | null>(null);
   const [successData, setSuccessData] = useState<{
     name: string;
     accountNumber: string;
@@ -72,6 +73,7 @@ export default function UserRegistrationModal({
       switchUser(created.id);
     }
 
+    setCreatedUserId(created.id);
     setSuccessData({
       name: created.name,
       accountNumber: created.accountNumber,
@@ -81,20 +83,21 @@ export default function UserRegistrationModal({
       postalCode: created.postalCode || postalCode,
       currency,
     });
-
-    if (onSuccess) {
-      onSuccess(created.id);
-    }
   };
 
   const handleResetAndClose = () => {
+    const idToReturn = createdUserId;
     setSuccessData(null);
+    setCreatedUserId(null);
     setName('');
     setEmail('');
     setPhone('');
     setInitialDeposit('1000');
     setTier('Personal');
     onClose();
+    if (idToReturn && onSuccess) {
+      onSuccess(idToReturn);
+    }
   };
 
   return (

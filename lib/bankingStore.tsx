@@ -1141,12 +1141,12 @@ export function BankingProvider({ children }: { children: React.ReactNode }) {
     });
 
     // Browser Push Notification (via Service Worker)
-    pushService.sendLocalNotification({
+    pushService?.sendLocalNotification?.({
       title: requiresApproval ? '⏳ Transferencia en Proceso SPEI' : '💸 Transferencia SPEI Exitosa',
       body: `-$${details.amount.toFixed(2)} USD a ${details.recipient}. Folio: ${trackingKey}`,
       tag: `tx-${trackingKey}`,
       data: { url: '/', trackingKey },
-    }).catch(() => {});
+    })?.catch?.(() => {});
 
     // Sync with production SPEI server API if type is SPEI
     if (details.type === 'spei') {
@@ -1236,12 +1236,12 @@ export function BankingProvider({ children }: { children: React.ReactNode }) {
     });
 
     // Browser Push Notification (via Service Worker)
-    pushService.sendLocalNotification({
+    pushService?.sendLocalNotification?.({
       title: '💰 Depósito Acreditado',
       body: `+$${amount.toFixed(2)} USD acreditados vía ${method}. Folio: ${trackingKey}`,
       tag: `dep-${trackingKey}`,
       data: { url: '/', trackingKey },
-    }).catch(() => {});
+    })?.catch?.(() => {});
   };
 
   const adminCreditAccount = (userId: string, amount: number, concept: string) => {

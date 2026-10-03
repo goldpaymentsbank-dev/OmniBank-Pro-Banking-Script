@@ -104,6 +104,10 @@ class PushNotificationManager {
       return false;
     }
   }
+
+  public async sendLocalNotification(payload: PushNotificationPayload): Promise<boolean> {
+    return this.sendNotification(payload);
+  }
 }
 
 export const pushService = new PushNotificationManager();

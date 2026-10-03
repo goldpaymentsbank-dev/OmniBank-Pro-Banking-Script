@@ -42,6 +42,7 @@ import LiveSupportChat from '@/components/LiveSupportChat';
 import TransactionReceiptModal from '@/components/TransactionReceiptModal';
 import Plus500PaymentModal from '@/components/Plus500PaymentModal';
 import BiometricAuthModal from '@/components/BiometricAuthModal';
+import BiometricLoginScreen from '@/components/BiometricLoginScreen';
 import { cn } from '@/lib/utils';
 import { BankingProvider, useBanking, TransactionItem } from '@/lib/bankingStore';
 
@@ -61,6 +62,7 @@ function BankingAppContent() {
   } = useBanking();
 
   const [activeView, setActiveView] = useState<View>('dashboard');
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [isUserSwitcherOpen, setIsUserSwitcherOpen] = useState(false);
@@ -123,6 +125,10 @@ function BankingAppContent() {
     ).slice(0, 2),
   } : null;
 
+  if (!isAuthenticated) {
+    return <BiometricLoginScreen onAuthenticated={() => setIsAuthenticated(true)} />;
+  }
+
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col md:flex-row font-sans">
       {/* Mobile Header */}
@@ -134,6 +140,13 @@ function BankingAppContent() {
           <span className="font-bold text-base tracking-tight text-neutral-100">Gold Payments</span>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setIsAuthenticated(false)}
+            className="p-2 text-neutral-400 hover:text-amber-400 rounded-lg hover:bg-neutral-800 transition-colors cursor-pointer"
+            title="Bloquear sesión con FIDO2"
+          >
+            <Fingerprint size={18} />
+          </button>
           <button
             id="mobile-pay-plus500-btn"
             onClick={() => setIsPlus500ModalOpen(true)}
@@ -467,10 +480,20 @@ function BankingAppContent() {
             <button
               id="header-pay-plus500-btn"
               onClick={() => setIsPlus500ModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-xs font-bold transition-all shadow-sm shadow-amber-500/10"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-xs font-bold transition-all shadow-sm shadow-amber-500/10 cursor-pointer"
             >
               <Send size={13} />
               <span>Pagar Plus500 (MXN)</span>
+            </button>
+
+            {/* Quick FIDO2 Lock Button */}
+            <button
+              onClick={() => setIsAuthenticated(false)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-neutral-900 hover:bg-neutral-850 border border-neutral-800 text-xs text-neutral-300 hover:text-amber-400 transition-colors cursor-pointer"
+              title="Bloquear sesión con FIDO2"
+            >
+              <Fingerprint size={14} className="text-amber-400" />
+              <span className="hidden lg:inline font-semibold">Bloquear FIDO2</span>
             </button>
 
             <div className="relative">
@@ -592,12 +615,12 @@ function BankingAppContent() {
             <div className="flex gap-3 pt-2">
               <button 
                 onClick={() => {
-                  setIsLocked(true);
+                  setIsAuthenticated(false);
                   setIsSignOutModalOpen(false);
                 }}
-                className="flex-1 py-3 bg-neutral-800 text-neutral-200 font-semibold rounded-xl hover:bg-neutral-700 transition-colors text-xs"
+                className="flex-1 py-3 bg-neutral-800 text-neutral-200 font-semibold rounded-xl hover:bg-neutral-700 transition-colors text-xs cursor-pointer"
               >
-                Bloquear Sesión
+                Bloquear con FIDO2
               </button>
               <button 
                 onClick={() => {
